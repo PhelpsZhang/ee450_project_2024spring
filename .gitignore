@@ -1,0 +1,15 @@
+# ignore .o and .obj
+*.o
+*.obj
+
+# ignore executable file, etc.
+*
+!*.c
+!*.cpp
+!*.h
+!Makefile
+!*.txt
+!*.md
+!/.gitignore
+
+.DS_Store
