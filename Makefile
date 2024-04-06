@@ -5,11 +5,15 @@ CXX=g++
 CXXFLAGS=-Wall -g
 
 # target
-all: client serverM
+all: client serverM serverS
 
 # serverM compiling rule
 serverM: serverM.o
 	$(CXX) $(CXXFLAGS) -o serverM serverM.o
+
+# serverS compiling rule
+serverS: serverS.o
+	$(CXX) $(CXXFLAGS) -o serverS serverS.o
 
 # client compiling rule
 client: client.o
@@ -19,6 +23,10 @@ client: client.o
 serverM.o: serverM.cpp serverM.h
 	$(CXX) $(CXXFLAGS) -c serverM.cpp
 
+# serverS dependency
+serverS.o: serverS.cpp serverS.h
+	$(CXX) $(CXXFLAGS) -c serverS.cpp
+
 # client dependency
 client.o: client.cpp client.h
 	$(CXX) $(CXXFLAGS) -c client.cpp
@@ -26,4 +34,4 @@ client.o: client.cpp client.h
 
 # clean
 clean:
-	rm -f client serverM *.o
+	rm -f client serverM serverS *.o

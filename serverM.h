@@ -20,4 +20,6 @@ void testFuntion(int a);
 
 int serverSocketInitialize();
 
+int forwardToBackendServer(const char*);
+
 #endif
