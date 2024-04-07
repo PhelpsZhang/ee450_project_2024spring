@@ -25,6 +25,20 @@ void encrypt(const std::string& input, std::string& output){
 }
 
 
+void displayAuth(const std::string responseMsgCode, const std::string username) {
+    std::string displayMsg;
+    if (responseMsgCode == "100") {
+        displayMsg = "Welcome guest " + username;
+    } else if (responseMsgCode == "200") {
+        displayMsg = "Username does not exist.";
+    } else if (responseMsgCode == "300") {
+        displayMsg = "Password does not match.";
+    } else if (responseMsgCode == "400") {
+        displayMsg = "Welcome member " + username;
+    }
+    std::cout << displayMsg << std::endl;
+}
+
 /*
 Client - TCP Socket
 Create Socket - socket()
@@ -105,6 +119,20 @@ int clientSocketInitialize(){
     dataLen = htonl(encryptPassword.length());
     send(clientSocketFD, &dataLen, sizeof(dataLen), 0);
     send(clientSocketFD, encryptPassword.data(), encryptPassword.length(), 0);
+
+
+    // receive authentication Msg
+    char buffer[1024] = {};
+    std::string res;
+    recv(clientSocketFD, buffer, 1024, 0);
+    // std::cout << buffer << " buffer size:" << strlen(buffer) << std::endl;
+    displayAuth(buffer, username);
+    
+    
+    while (true) {
+        // send request
+        
+    }
 
     // send data
     //const char* roomcode = "S102";

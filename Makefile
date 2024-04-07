@@ -2,7 +2,7 @@
 CXX=g++
 
 # define option, -Wall warning, -g debugging info
-CXXFLAGS=-Wall -g
+CXXFLAGS=-Wall -g -std=c++11
 
 # target
 all: client serverM serverS

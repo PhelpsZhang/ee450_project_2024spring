@@ -13,6 +13,9 @@
 #include<arpa/inet.h>
 #include<sys/wait.h>
 
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
 #include <string>
 #include <iostream>
 
@@ -25,11 +28,21 @@ enum {
     ERROR_FLAG = -1
 };
 
-int serverSocketInitialize();
+enum AuthCode {
+    GUEST_SUCCESS,     // GUEST 
+    WRONG_USER, // username doesnot exist
+    WRONG_PASS,  // password doesnot match
+    MEMBER_SUCCESS    // MEMBER login success
+};
+
 
 int recvMessage(int socketFD, std::string &output);
 
-int loadMember();
+int loadMember(std::unordered_map<std::string, std::string> &result);
+
+AuthCode checkAuth(const std::unordered_map<std::string, std::string> &map, std::string username, std::string password);
+
+std::string authToString(AuthCode code);
 
 int forwardToBackendServer(const char*);
 

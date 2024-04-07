@@ -1,10 +1,82 @@
 #include "serverM.h"
 #define LOCAL_HOST "127.0.0.1"
 
+/*
+Server - TCP Socket
+Create Socket - socket()
+Bind Socket - bind()
+Listen - listen()
+Accept - accept()
+---
+Data Transfer - myHandleFunction()
+Handle Request - myHandleFunction()
+    - Create Child Socket - Fork()?
+Destory Socket - close()
+*/
 
-int loadMember() {
+
+/*
+Client - UDP Socket
+Create Socket - socket()
+Connect - connect()
+---
+Data Transfer - myHandleFunction()
+Handle Response - myHandleFunction()
+Destory Socket - close()
+*/
+
+int loadMember(std::unordered_map<std::string, std::string> &credentials) {
     // load members from DB to data structure (memory).
+    std::ifstream file("member.txt");
+    std::string line;
+
+    if (!file) {
+        std::cout << "cannot open file member_unencrypted.ext" << std::endl;
+        return ERROR_FLAG;
+    }
+
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::string username, password;
+        if (std::getline(iss, username, ',')) {
+            iss.get();
+            std::getline(iss, password);
+            credentials[username] = password;
+        } else {
+            std::cout << "format wrong OR file end." << std::endl;
+        }
+    }
+
+    file.close();
+
+    
+    for (auto it = credentials.begin(); it != credentials.end(); ++it) {
+        std::cout << "username:" << it->first << it->second << std::endl;
+    }
     return 0;
+}
+
+AuthCode checkAuth(const std::unordered_map<std::string, std::string> &map, std::string username, std::string password) {
+    if (0 == password.length()) return AuthCode::GUEST_SUCCESS;
+    auto it = map.find(username);
+    if (it == map.end()) {
+        std::cout << "Username does not exist." << std::endl;
+        return AuthCode::WRONG_USER;
+    } else if (password != it->second) {
+        std::cout << "Password does not match." << std::endl;
+        return AuthCode::WRONG_PASS;
+    }
+    return AuthCode::MEMBER_SUCCESS;
+}
+
+std::string authToString(AuthCode code) {
+    switch (code) {
+        case AuthCode::GUEST_SUCCESS: return "100";
+        case AuthCode::WRONG_USER: return "200";
+        case AuthCode::WRONG_PASS: return "300";
+        case AuthCode::MEMBER_SUCCESS: return "400";
+        default: return "error";
+    }
 }
 
 int recvAuthMessage(int socketFD, std::string &output) {
@@ -12,6 +84,12 @@ int recvAuthMessage(int socketFD, std::string &output) {
     uint32_t len;
     recv(socketFD, &len, sizeof(len), 0);
     len = ntohl(len);
+
+    // if password.length() == 0, we should not recv more, otherwise it will stall and wait.
+    if (len == 0) {
+        output = "";
+        return 0;
+    }
 
     char *buffer = new char[len+1];
     int readBytesLen = recv(socketFD, buffer, len, 0);
@@ -25,22 +103,54 @@ int recvAuthMessage(int socketFD, std::string &output) {
     return 0;
 }
 
-// Socket initialization
 
-/*
-Server - TCP Socket
-Create Socket - socket()
-Bind Socket - bind()
-Listen - listen()
-Accept - accept()
----
-Data Transfer - myHandleFunction()
-Handle Request - myHandleFunction()
-    - Create Child Socket - Fork()?
-Destory Socket - close()
-*/
-int serverSocketInitialize() {
-    // create socket;
+
+int forwardToBackendServer(const char* roomcode){
+
+    char buffer[MAXLINE];
+    // const char *hello = "Hello from serverM by UDP";
+    sockaddr_in serverAddress;
+
+    int serverUdpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    memset(&serverAddress, 0, sizeof(serverAddress));
+
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(TARGET_UDP_PORT);
+    inet_pton(AF_INET, LOCAL_HOST, &(serverAddress.sin_addr));
+
+    socklen_t len;
+
+    // sendto(serverUdpSocket, (const char*)hello, strlen(hello), MSG_CONFIRM,
+    //    (const struct sockaddr *) &serverAddress, sizeof(serverAddress));
+    // std::cout << "Hello Message sent " << std::endl;
+
+    //if(roomcode[0] == 'S') {
+    if(1) {
+        memset(&buffer, 0, sizeof(buffer));
+        sendto(serverUdpSocket, roomcode, strlen(roomcode), MSG_CONFIRM,
+        (const struct sockaddr *) &serverAddress, sizeof(serverAddress));
+        std::cout << "S roomcode sent." << std::endl;
+
+        int n = recvfrom(serverUdpSocket, (char*)buffer, MAXLINE,
+                MSG_WAITALL, (struct sockaddr *) &serverAddress, &len);
+        buffer[n] = '\0';
+        std::cout << "serverS: " << buffer << std::endl; 
+    }
+
+    close(serverUdpSocket);
+
+    return 0;
+}
+
+
+int main() {
+    std::cout << "The main server is up and running." << std::endl;
+
+    // load the member data into memory.
+    std::unordered_map<std::string, std::string> credentials;
+    loadMember(credentials);
+
+        // create socket;
     int serverSocketFD = socket(AF_INET, SOCK_STREAM, 0);
     if(ERROR_FLAG == serverSocketFD) {
         std::cout << "Socket FD Failed." << std::endl;
@@ -88,6 +198,13 @@ int serverSocketInitialize() {
     std::cout << "read username: " << encryptUsername << std::endl;
     std::cout << "read password: " << encryptPassword << std::endl;
 
+    // check Authentication and send response
+    AuthCode resCode = checkAuth(credentials, encryptUsername, encryptPassword);
+    std::string responseAuthMsg = authToString(resCode);
+    std::cout << "responseAuthMsg " << responseAuthMsg << std::endl;
+    send(serverChildSocketFD, responseAuthMsg.data(), responseAuthMsg.length(), 0);
+
+
     char buffer[1024] = {};
     
     while(1){
@@ -109,60 +226,5 @@ int serverSocketInitialize() {
     // }
     close(serverChildSocketFD);
     close(serverSocketFD);
-    return 0;
-}
-
-
-/*
-Client - UDP Socket
-Create Socket - socket()
-Connect - connect()
----
-Data Transfer - myHandleFunction()
-Handle Response - myHandleFunction()
-Destory Socket - close()
-*/
-
-int forwardToBackendServer(const char* roomcode){
-
-    char buffer[MAXLINE];
-    // const char *hello = "Hello from serverM by UDP";
-    sockaddr_in serverAddress;
-
-    int serverUdpSocket = socket(AF_INET, SOCK_DGRAM, 0);
-    memset(&serverAddress, 0, sizeof(serverAddress));
-
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(TARGET_UDP_PORT);
-    inet_pton(AF_INET, LOCAL_HOST, &(serverAddress.sin_addr));
-
-    socklen_t len;
-
-    // sendto(serverUdpSocket, (const char*)hello, strlen(hello), MSG_CONFIRM,
-    //    (const struct sockaddr *) &serverAddress, sizeof(serverAddress));
-    // std::cout << "Hello Message sent " << std::endl;
-
-    //if(roomcode[0] == 'S') {
-    if(1) {
-        memset(&buffer, 0, sizeof(buffer));
-        sendto(serverUdpSocket, roomcode, strlen(roomcode), MSG_CONFIRM,
-        (const struct sockaddr *) &serverAddress, sizeof(serverAddress));
-        std::cout << "S roomcode sent." << std::endl;
-
-        int n = recvfrom(serverUdpSocket, (char*)buffer, MAXLINE,
-                MSG_WAITALL, (struct sockaddr *) &serverAddress, &len);
-        buffer[n] = '\0';
-        std::cout << "serverS: " << buffer << std::endl; 
-    }
-
-    close(serverUdpSocket);
-
-    return 0;
-}
-
-
-int main() {
-    std::cout << "The main server is up and running." << std::endl;
-    serverSocketInitialize();
     return 0;
 }

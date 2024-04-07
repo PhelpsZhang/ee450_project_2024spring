@@ -29,4 +29,6 @@ bool checkValid(const std::string& input);
 
 void encrypt(const std::string& input, std::string& output);
 
+void displayAuth(const std::string responseMsgCode, const std::string username);
+
 #endif
