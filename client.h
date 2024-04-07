@@ -13,8 +13,20 @@
 #include<arpa/inet.h>
 #include<sys/wait.h>
 
-void clientSocketInitialize();
+#include <iostream>
+#include <string>
 
+enum {
+    FOREIGN_PORT = 45089,
+    ERROR_FLAG = -1,
+    GUEST = 1,
+    MEMBER = 2
+};
 
+int clientSocketInitialize();
+
+bool checkValid(const std::string& input);
+
+void encrypt(const std::string& input, std::string& output);
 
 #endif

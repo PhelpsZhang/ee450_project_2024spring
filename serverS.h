@@ -14,6 +14,11 @@
 #include<sys/wait.h>
 
 
+enum {
+    UDP_PORT = 41089,
+    MAXLINE = 1024
+};
+
 void handleRequest();
 
 #endif

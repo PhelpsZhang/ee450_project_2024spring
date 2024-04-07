@@ -1,14 +1,28 @@
 #include "serverM.h"
-#include <iostream>
-
 #define LOCAL_HOST "127.0.0.1"
-#define TCP_PORT 8080
-#define UDP_PORT 8888 // target UDP S server
-#define QUEUE_LIMIT 5
-#define MAXLINE 1024
 
-void testFunction(int a){
-    std::cout << a << std::endl;
+
+int loadMember() {
+    // load members from DB to data structure (memory).
+    return 0;
+}
+
+int recvAuthMessage(int socketFD, std::string &output) {
+    // receive the message including length and data.
+    uint32_t len;
+    recv(socketFD, &len, sizeof(len), 0);
+    len = ntohl(len);
+
+    char *buffer = new char[len+1];
+    int readBytesLen = recv(socketFD, buffer, len, 0);
+    buffer[len] = '\0';
+    if (readBytesLen > 0) {
+        output = std::string(buffer, readBytesLen);
+    } else {
+        std::cout << "socket receive error OR connection down" << std::endl;
+    }
+    delete[] buffer;
+    return 0;
 }
 
 // Socket initialization
@@ -27,38 +41,74 @@ Destory Socket - close()
 */
 int serverSocketInitialize() {
     // create socket;
-    int serverParentSocket = socket(AF_INET, SOCK_STREAM, 0);
-    
+    int serverSocketFD = socket(AF_INET, SOCK_STREAM, 0);
+    if(ERROR_FLAG == serverSocketFD) {
+        std::cout << "Socket FD Failed." << std::endl;
+        return ERROR_FLAG;
+    }
+
     // prepare socket address struct.
-    sockaddr_in serverAddress;
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(TCP_PORT);
+    sockaddr_in serverSocketAddress;
+    memset(&serverSocketAddress, 0, sizeof(serverSocketAddress));
+    serverSocketAddress.sin_family = AF_INET;
+    serverSocketAddress.sin_port = htons(TCP_PORT);
     // serverAddress.sin_addr.s_addr = LOCAL_HOST;
-    inet_pton(AF_INET, LOCAL_HOST, &(serverAddress.sin_addr));
+    inet_pton(AF_INET, LOCAL_HOST, &(serverSocketAddress.sin_addr));
 
     // bind socket to local (socket, address(IP+portNumber), length)
     // add some error check 
-    bind(serverParentSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
+    if (ERROR_FLAG == bind(serverSocketFD, (struct sockaddr*)&serverSocketAddress, sizeof(serverSocketAddress))) {
+        std::cout << "Socket bind Failed." << std::endl;
+        return ERROR_FLAG;
+    }
+
     // listening to assigned socket
     // add error check
-    listen(serverParentSocket, QUEUE_LIMIT);
-    std::cout << "Parent Socket Listenning.." << std::endl;
-
-    // sockaddr_in clientAddress;
+    if (ERROR_FLAG == listen(serverSocketFD, QUEUE_LIMIT)) {
+        std::cout << "Socket listen Failed." << std::endl;
+        return ERROR_FLAG;  
+    }
+    
+    sockaddr_in clientSocketAddress;
+    socklen_t clientAddrLen = sizeof(clientSocketAddress);
+    memset(&clientSocketAddress, 0, clientAddrLen);
     // accepting connection request
-    int serverChildSocket = accept(serverParentSocket, NULL, NULL);
+    int serverChildSocketFD = accept(serverSocketFD, (struct sockaddr *)&clientSocketAddress, &clientAddrLen);
     // child socket created, receiving data
-    char buffer[1024];
+    if (ERROR_FLAG == serverChildSocketFD) {
+        std::cout << "Socket accept Failed." << std::endl;
+        return ERROR_FLAG;       
+    }
 
+    // recv(), -1, error; 0, connect down; x, bytes length
+    std::string encryptUsername, encryptPassword;
+    recvAuthMessage(serverChildSocketFD, encryptUsername);
+    recvAuthMessage(serverChildSocketFD, encryptPassword);
+
+    std::cout << "read username: " << encryptUsername << std::endl;
+    std::cout << "read password: " << encryptPassword << std::endl;
+
+    char buffer[1024] = {};
+    
     while(1){
         memset(&buffer, 0, sizeof(buffer));
-        int recvFlag = recv(serverChildSocket, buffer, sizeof(buffer), 0);
+        int recvFlag = recv(serverChildSocketFD, buffer, sizeof(buffer), 0);
         if (recvFlag <= 0) break;
         std::cout << "Data received from Client: " << buffer << std::endl;
         // add control logic to Which Server
         forwardToBackendServer(buffer);
     }
-    close(serverParentSocket);
+
+    // while(1){
+    //     memset(&buffer, 0, sizeof(buffer));
+    //     int recvFlag = recv(serverChildSocket, buffer, sizeof(buffer), 0);
+    //     if (recvFlag <= 0) break;
+    //     std::cout << "Data received from Client: " << buffer << std::endl;
+    //     // add control logic to Which Server
+    //     forwardToBackendServer(buffer);
+    // }
+    close(serverChildSocketFD);
+    close(serverSocketFD);
     return 0;
 }
 
@@ -83,7 +133,7 @@ int forwardToBackendServer(const char* roomcode){
     memset(&serverAddress, 0, sizeof(serverAddress));
 
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(UDP_PORT);
+    serverAddress.sin_port = htons(TARGET_UDP_PORT);
     inet_pton(AF_INET, LOCAL_HOST, &(serverAddress.sin_addr));
 
     socklen_t len;
@@ -112,8 +162,7 @@ int forwardToBackendServer(const char* roomcode){
 
 
 int main() {
-    std::cout << "Hello World!" << std::endl;
-    testFunction(3);
+    std::cout << "The main server is up and running." << std::endl;
     serverSocketInitialize();
     return 0;
 }

@@ -13,12 +13,23 @@
 #include<arpa/inet.h>
 #include<sys/wait.h>
 
+#include <string>
+#include <iostream>
 
-
-
-void testFuntion(int a);
+enum {
+    TCP_PORT = 45089,
+    UDP_PORT = 44089,
+    TARGET_UDP_PORT = 41089,// target UDP S server
+    QUEUE_LIMIT = 5,
+    MAXLINE = 1024,
+    ERROR_FLAG = -1
+};
 
 int serverSocketInitialize();
+
+int recvMessage(int socketFD, std::string &output);
+
+int loadMember();
 
 int forwardToBackendServer(const char*);
 

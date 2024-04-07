@@ -1,8 +1,7 @@
 #include "serverS.h"
 #include <iostream>
 
-#define PORT 8888
-#define MAXLINE 1024
+
 
 void handleRequest(){
     char buffer[MAXLINE];
@@ -16,7 +15,7 @@ void handleRequest(){
 
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = INADDR_ANY;
-    serverAddress.sin_port = htons(PORT);
+    serverAddress.sin_port = htons(UDP_PORT);
 
     // bind
     bind(serverSSocket, (const struct sockaddr *)&serverAddress, sizeof(serverAddress));
