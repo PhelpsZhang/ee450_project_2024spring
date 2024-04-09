@@ -57,24 +57,24 @@ int loadMember(std::unordered_map<std::string, std::string> &credentials) {
 }
 
 AuthCode checkAuth(const std::unordered_map<std::string, std::string> &map, std::string username, std::string password) {
-    if (0 == password.length()) return AuthCode::GUEST_SUCCESS;
+    if (0 == password.length()) return GUEST_SUCCESS;
     auto it = map.find(username);
     if (it == map.end()) {
         std::cout << "Username does not exist." << std::endl;
-        return AuthCode::WRONG_USER;
+        return WRONG_USER;
     } else if (password != it->second) {
         std::cout << "Password does not match." << std::endl;
-        return AuthCode::WRONG_PASS;
+        return WRONG_PASS;
     }
-    return AuthCode::MEMBER_SUCCESS;
+    return MEMBER_SUCCESS;
 }
 
 std::string authToString(AuthCode code) {
     switch (code) {
-        case AuthCode::GUEST_SUCCESS: return "100";
-        case AuthCode::WRONG_USER: return "200";
-        case AuthCode::WRONG_PASS: return "300";
-        case AuthCode::MEMBER_SUCCESS: return "400";
+        case GUEST_SUCCESS: return "100";
+        case WRONG_USER: return "200";
+        case WRONG_PASS: return "300";
+        case MEMBER_SUCCESS: return "400";
         default: return "error";
     }
 }
@@ -103,7 +103,18 @@ int recvAuthMessage(int socketFD, std::string &output) {
     return 0;
 }
 
+int parseRequest(const std::string &requestMsg, std::string &opCode, std::string &roomcode) {
+    if (requestMsg.length() == 0) {
+        std::cout << "requestMsg Error!" << std::endl;
+        return ERROR_FLAG;
+    }
 
+    std::istringstream iss(requestMsg);
+    std::getline(iss, opCode, ':');
+    std::getline(iss, roomcode, ':');
+    std::cout << "opCode: " << opCode << " roomcode: " << roomcode << std::endl;
+    return 0;
+}
 
 int forwardToBackendServer(const char* roomcode){
 
@@ -150,7 +161,7 @@ int main() {
     std::unordered_map<std::string, std::string> credentials;
     loadMember(credentials);
 
-        // create socket;
+    // create socket;
     int serverSocketFD = socket(AF_INET, SOCK_STREAM, 0);
     if(ERROR_FLAG == serverSocketFD) {
         std::cout << "Socket FD Failed." << std::endl;
@@ -192,26 +203,45 @@ int main() {
 
     // recv(), -1, error; 0, connect down; x, bytes length
     std::string encryptUsername, encryptPassword;
+    // distinguish the userType
+    UserType userType = encryptPassword.length() == 0 ? GUEST : MEMBER;
+
     recvAuthMessage(serverChildSocketFD, encryptUsername);
     recvAuthMessage(serverChildSocketFD, encryptPassword);
+    // member!!! need if
+    // need distinguish UserType and Request Type
+    if (MEMBER == userType) 
+        std::cout << "The main server received the authentication for " << encryptUsername << " using TCP over port " << TCP_PORT << std::endl;
+    else {
+        std::cout << "The main server received the guest request for " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
+        std::cout << "The main server accepts " << encryptUsername << " as a guest" << std::endl;
+    }
+        
+    // std::cout << "read username: " << encryptUsername << std::endl;
+    // std::cout << "read password: " << encryptPassword << std::endl;
 
-    std::cout << "read username: " << encryptUsername << std::endl;
-    std::cout << "read password: " << encryptPassword << std::endl;
-
-    // check Authentication and send response
+    // check Authentication and send response. Do with both guest and member.
     AuthCode resCode = checkAuth(credentials, encryptUsername, encryptPassword);
     std::string responseAuthMsg = authToString(resCode);
-    std::cout << "responseAuthMsg " << responseAuthMsg << std::endl;
+    // std::cout << "responseAuthMsg " << responseAuthMsg << std::endl;
     send(serverChildSocketFD, responseAuthMsg.data(), responseAuthMsg.length(), 0);
+    std::cout << "The main server sent the authentication result to the client. " << std::endl;
 
+    // only when one passes authentication, continue to execute the code.
+    // Maybe change to while.
+    if (resCode == WRONG_USER || resCode == WRONG_PASS) return 0;
 
     char buffer[1024] = {};
     
-    while(1){
+    while (true) {
         memset(&buffer, 0, sizeof(buffer));
         int recvFlag = recv(serverChildSocketFD, buffer, sizeof(buffer), 0);
         if (recvFlag <= 0) break;
         std::cout << "Data received from Client: " << buffer << std::endl;
+        std::string opCode;
+        std::string roomcode;
+        parseRequest(buffer, opCode, roomcode);
+
         // add control logic to Which Server
         forwardToBackendServer(buffer);
     }

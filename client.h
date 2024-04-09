@@ -19,8 +19,16 @@
 enum {
     FOREIGN_PORT = 45089,
     ERROR_FLAG = -1,
-    GUEST = 1,
-    MEMBER = 2
+};
+
+enum UserType {
+    MEMBER,
+    GUEST
+};
+
+enum RequestType {
+    AVAILABILITY,
+    RESERVATION
 };
 
 int clientSocketInitialize();

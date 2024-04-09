@@ -30,9 +30,9 @@ void displayAuth(const std::string responseMsgCode, const std::string username) 
     if (responseMsgCode == "100") {
         displayMsg = "Welcome guest " + username;
     } else if (responseMsgCode == "200") {
-        displayMsg = "Username does not exist.";
+        displayMsg = "Failed login: Username does not exist.";
     } else if (responseMsgCode == "300") {
-        displayMsg = "Password does not match.";
+        displayMsg = "Failed login: Password does not match.";
     } else if (responseMsgCode == "400") {
         displayMsg = "Welcome member " + username;
     }
@@ -100,12 +100,6 @@ int clientSocketInitialize(){
     }
     int localPort = ntohs(localSocketAddress.sin_port);
 
-    if (userType == GUEST) {
-        std::cout << username <<" sent a guest request to the main server using TCP over port " << localPort << std::endl;
-    } else if (userType == MEMBER) {
-        std::cout << username <<" sent an authentication request to the main server." << std::endl;
-    }
-
     std::string encryptUsername, encryptPassword;
     encrypt(username, encryptUsername);
     encrypt(password, encryptPassword);
@@ -120,6 +114,11 @@ int clientSocketInitialize(){
     send(clientSocketFD, &dataLen, sizeof(dataLen), 0);
     send(clientSocketFD, encryptPassword.data(), encryptPassword.length(), 0);
 
+    if (userType == GUEST) {
+        std::cout << username <<" sent a guest request to the main server using TCP over port " << localPort << std::endl;
+    } else if (userType == MEMBER) {
+        std::cout << username <<" sent an authentication request to the main server." << std::endl;
+    }
 
     // receive authentication Msg
     char buffer[1024] = {};
@@ -128,10 +127,38 @@ int clientSocketInitialize(){
     // std::cout << buffer << " buffer size:" << strlen(buffer) << std::endl;
     displayAuth(buffer, username);
     
-    
+    std::string roomCode;
+    std::string opCode = "Availability";
+
     while (true) {
+        std::cout << "Please enter the room code:";
+        std::getline(std::cin, roomCode);
+        std::cout << "Would you like to search for the availability or make a reservation?(Enter \"Availability\" to search for the availability or Enter \"Reservation\" to make a reservation):";
+        std::getline(std::cin, opCode);
+
+        if (opCode.length() == 0 || roomCode.length() == 0)
+            std::cout << "invalid Input" << std::endl;
+
+        std::string RequestMsg = opCode + ":" + roomCode;
+        if (opCode == "Availability") {
+            // send an availability
+            send(clientSocketFD, RequestMsg.data(), RequestMsg.length(), 0);
+            std::cout << username << " sent an availability request to the main server." << std::endl;
+
+        } else if (opCode == "Reservation") {
+
+            if (userType == GUEST) {
+                // Actually, we don't have to send request.
+                std::cout << username << " sent a reservation request to the main server." << std::endl;
+                std::cout << "Perssion denied: Guest cannot make a reservation." << std::endl;
+            } else {
+                // send an reservation
+                send(clientSocketFD, RequestMsg.data(), RequestMsg.length(), 0);
+                std::cout << username << " sent a reservation request to the main server." << std::endl;
+            }
+        }
         // send request
-        
+
     }
 
     // send data

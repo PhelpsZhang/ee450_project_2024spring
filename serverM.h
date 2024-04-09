@@ -35,6 +35,15 @@ enum AuthCode {
     MEMBER_SUCCESS    // MEMBER login success
 };
 
+enum UserType {
+    MEMBER,
+    GUEST
+};
+
+enum RequestType {
+    AVAILABILITY,
+    RESERVATION
+};
 
 int recvMessage(int socketFD, std::string &output);
 
@@ -45,5 +54,7 @@ AuthCode checkAuth(const std::unordered_map<std::string, std::string> &map, std:
 std::string authToString(AuthCode code);
 
 int forwardToBackendServer(const char*);
+
+int parseRequest(std::string &requestMsg, std::string &opCode, std::string &roomcode);
 
 #endif
