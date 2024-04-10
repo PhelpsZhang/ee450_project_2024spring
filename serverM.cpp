@@ -39,7 +39,8 @@ int loadMember(std::unordered_map<std::string, std::string> &credentials) {
         std::istringstream iss(line);
         std::string username, password;
         if (std::getline(iss, username, ',')) {
-            iss.get();
+            // iss.get();
+            iss >> std::ws;
             std::getline(iss, password);
             credentials[username] = password;
         } else {
@@ -103,52 +104,23 @@ int recvAuthMessage(int socketFD, std::string &output) {
     return 0;
 }
 
-int parseRequest(const std::string &requestMsg, std::string &opCode, std::string &roomcode) {
+int parseRequest(const std::string &requestMsg, RequestType &reqCode, std::string &roomcode) {
     if (requestMsg.length() == 0) {
         std::cout << "requestMsg Error!" << std::endl;
         return ERROR_FLAG;
     }
 
+    std::string opCode;
     std::istringstream iss(requestMsg);
     std::getline(iss, opCode, ':');
     std::getline(iss, roomcode, ':');
     std::cout << "opCode: " << opCode << " roomcode: " << roomcode << std::endl;
-    return 0;
-}
 
-int forwardToBackendServer(const char* roomcode){
-
-    char buffer[MAXLINE];
-    // const char *hello = "Hello from serverM by UDP";
-    sockaddr_in serverAddress;
-
-    int serverUdpSocket = socket(AF_INET, SOCK_DGRAM, 0);
-    memset(&serverAddress, 0, sizeof(serverAddress));
-
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(TARGET_UDP_PORT);
-    inet_pton(AF_INET, LOCAL_HOST, &(serverAddress.sin_addr));
-
-    socklen_t len;
-
-    // sendto(serverUdpSocket, (const char*)hello, strlen(hello), MSG_CONFIRM,
-    //    (const struct sockaddr *) &serverAddress, sizeof(serverAddress));
-    // std::cout << "Hello Message sent " << std::endl;
-
-    //if(roomcode[0] == 'S') {
-    if(1) {
-        memset(&buffer, 0, sizeof(buffer));
-        sendto(serverUdpSocket, roomcode, strlen(roomcode), MSG_CONFIRM,
-        (const struct sockaddr *) &serverAddress, sizeof(serverAddress));
-        std::cout << "S roomcode sent." << std::endl;
-
-        int n = recvfrom(serverUdpSocket, (char*)buffer, MAXLINE,
-                MSG_WAITALL, (struct sockaddr *) &serverAddress, &len);
-        buffer[n] = '\0';
-        std::cout << "serverS: " << buffer << std::endl; 
+    if (opCode == "Availability") {
+        reqCode = AVAILABILITY;
+    } else {
+        reqCode = RESERVATION;
     }
-
-    close(serverUdpSocket);
 
     return 0;
 }
@@ -161,7 +133,37 @@ int main() {
     std::unordered_map<std::string, std::string> credentials;
     loadMember(credentials);
 
-    // create socket;
+    // create udp Socket
+    int udpSocketFD = socket(AF_INET, SOCK_DGRAM, 0);
+    sockaddr_in udpSocketAddress;
+    memset(&udpSocketAddress, 0, sizeof(udpSocketAddress));
+    udpSocketAddress.sin_family = AF_INET;
+    udpSocketAddress.sin_port = htons(UDP_PORT);
+    inet_pton(AF_INET, LOCAL_HOST, &(udpSocketAddress.sin_addr));
+
+    // bind UDP socket
+    if (ERROR_FLAG == bind(udpSocketFD, (const struct sockaddr *)&udpSocketAddress, sizeof(udpSocketAddress))) {
+        std::cout << "UDP Socket bind Failed." << std::endl;
+        return ERROR_FLAG;
+    }
+
+    // initializa UDP remote sockaddr
+    sockaddr_in udpSAddress, udpDAddress, udpUAddress;
+    memset(&udpSAddress, 0, sizeof(udpSAddress));
+    memset(&udpDAddress, 0, sizeof(udpDAddress));
+    memset(&udpUAddress, 0, sizeof(udpUAddress));
+    udpSAddress.sin_family = AF_INET;
+    udpSAddress.sin_port = htons(REMOTE_S_PORT);
+    inet_pton(AF_INET, LOCAL_HOST, &(udpSAddress.sin_addr));
+    udpDAddress.sin_family = AF_INET;
+    udpDAddress.sin_port = htons(REMOTE_D_PORT);
+    inet_pton(AF_INET, LOCAL_HOST, &(udpDAddress.sin_addr));
+    udpUAddress.sin_family = AF_INET;
+    udpUAddress.sin_port = htons(REMOTE_U_PORT);
+    inet_pton(AF_INET, LOCAL_HOST, &(udpUAddress.sin_addr));
+
+
+    // create TCP socket;
     int serverSocketFD = socket(AF_INET, SOCK_STREAM, 0);
     if(ERROR_FLAG == serverSocketFD) {
         std::cout << "Socket FD Failed." << std::endl;
@@ -203,11 +205,12 @@ int main() {
 
     // recv(), -1, error; 0, connect down; x, bytes length
     std::string encryptUsername, encryptPassword;
-    // distinguish the userType
-    UserType userType = encryptPassword.length() == 0 ? GUEST : MEMBER;
 
     recvAuthMessage(serverChildSocketFD, encryptUsername);
     recvAuthMessage(serverChildSocketFD, encryptPassword);
+
+    // distinguish the userType
+    UserType userType = encryptPassword.length() == 0 ? GUEST : MEMBER;
     // member!!! need if
     // need distinguish UserType and Request Type
     if (MEMBER == userType) 
@@ -229,10 +232,13 @@ int main() {
 
     // only when one passes authentication, continue to execute the code.
     // Maybe change to while.
-    if (resCode == WRONG_USER || resCode == WRONG_PASS) return 0;
 
     char buffer[1024] = {};
     
+    if (resCode == WRONG_USER || resCode == WRONG_PASS) {
+        std::cout << "Wrong Auth. maybe abnormal shut down." << std::endl;
+    }
+
     while (true) {
         memset(&buffer, 0, sizeof(buffer));
         int recvFlag = recv(serverChildSocketFD, buffer, sizeof(buffer), 0);
@@ -240,10 +246,16 @@ int main() {
         std::cout << "Data received from Client: " << buffer << std::endl;
         std::string opCode;
         std::string roomcode;
-        parseRequest(buffer, opCode, roomcode);
+        RequestType reqType;
+        parseRequest(buffer, reqType, roomcode);
+        
+        // forward to UDP
+        if (userType == GUEST && reqType == RESERVATION) {
+            // permission denied.
+        }
 
         // add control logic to Which Server
-        forwardToBackendServer(buffer);
+        // forwardToBackendServer(roomcode, reqCode, userType,);
     }
 
     // while(1){

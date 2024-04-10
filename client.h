@@ -22,8 +22,8 @@ enum {
 };
 
 enum UserType {
-    MEMBER,
-    GUEST
+    GUEST,
+    MEMBER
 };
 
 enum RequestType {
@@ -37,6 +37,6 @@ bool checkValid(const std::string& input);
 
 void encrypt(const std::string& input, std::string& output);
 
-void displayAuth(const std::string responseMsgCode, const std::string username);
+bool receiveAuth(const std::string responseMsgCode, const std::string username);
 
 #endif

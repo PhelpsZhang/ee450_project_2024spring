@@ -25,18 +25,23 @@ void encrypt(const std::string& input, std::string& output){
 }
 
 
-void displayAuth(const std::string responseMsgCode, const std::string username) {
+bool receiveAuth(const std::string responseMsgCode, const std::string username) {
     std::string displayMsg;
     if (responseMsgCode == "100") {
         displayMsg = "Welcome guest " + username;
+        std::cout << displayMsg << std::endl;
+        return true;
     } else if (responseMsgCode == "200") {
         displayMsg = "Failed login: Username does not exist.";
     } else if (responseMsgCode == "300") {
         displayMsg = "Failed login: Password does not match.";
     } else if (responseMsgCode == "400") {
         displayMsg = "Welcome member " + username;
+        std::cout << displayMsg << std::endl;
+        return  true;
     }
     std::cout << displayMsg << std::endl;
+    return false;
 }
 
 /*
@@ -73,7 +78,7 @@ int clientSocketInitialize(){
     
     // type in the username and password
     std::string username, password;
-    int userType = GUEST;
+    UserType userType = GUEST;
     while (true) {
         std::cout << "Please enter the username: ";
         std::getline(std::cin, username);
@@ -84,12 +89,7 @@ int clientSocketInitialize(){
     
     std::cout << "Please enter the password (Press “Enter” to skip for guest): ";
     std::getline(std::cin, password);
-    if(password.empty())
-        userType = GUEST; 
-    else
-        userType = MEMBER;
     
-
     // get local Socket Address (PORT)
     sockaddr_in localSocketAddress;
     socklen_t socketLen = sizeof(localSocketAddress);
@@ -107,6 +107,7 @@ int clientSocketInitialize(){
     // std::cout << "after encrypting password:" << encryptPassword << std::endl;
 
     // Solving Problem about 'TCP no Boundary'.
+    // Potential Another way: The first n characters are designated as markers.
     uint32_t dataLen = htonl(encryptUsername.length());
     send(clientSocketFD, &dataLen, sizeof(dataLen), 0);    
     send(clientSocketFD, encryptUsername.data(), encryptUsername.length(), 0);
@@ -114,9 +115,11 @@ int clientSocketInitialize(){
     send(clientSocketFD, &dataLen, sizeof(dataLen), 0);
     send(clientSocketFD, encryptPassword.data(), encryptPassword.length(), 0);
 
-    if (userType == GUEST) {
+    if(password.empty()) {
+        userType = GUEST; 
         std::cout << username <<" sent a guest request to the main server using TCP over port " << localPort << std::endl;
-    } else if (userType == MEMBER) {
+    } else {
+        userType = MEMBER;
         std::cout << username <<" sent an authentication request to the main server." << std::endl;
     }
 
@@ -125,8 +128,12 @@ int clientSocketInitialize(){
     std::string res;
     recv(clientSocketFD, buffer, 1024, 0);
     // std::cout << buffer << " buffer size:" << strlen(buffer) << std::endl;
-    displayAuth(buffer, username);
+    bool authRes = receiveAuth(buffer, username);
     
+    if (!authRes) {
+        std::cout << "Wrong auth, maybe abnormal shutdown." << std::endl;
+    }
+
     std::string roomCode;
     std::string opCode = "Availability";
 

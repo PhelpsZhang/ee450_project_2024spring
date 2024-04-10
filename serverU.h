@@ -1,6 +1,7 @@
 #ifndef SERVER_U_H
 #define SERVER_U_H
 
+
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
@@ -13,7 +14,19 @@
 #include<arpa/inet.h>
 #include<sys/wait.h>
 
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
+#include<iostream>
+#include<string>
 
+enum {
+    UDP_PORT = 43089,
+    MAXLINE = 1024,
+    ERROR_FLAG = -1
+};
+
+int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap);
 
 
 #endif

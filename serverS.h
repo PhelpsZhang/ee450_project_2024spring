@@ -13,12 +13,18 @@
 #include<arpa/inet.h>
 #include<sys/wait.h>
 
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
+#include<iostream>
+#include<string>
 
 enum {
     UDP_PORT = 41089,
-    MAXLINE = 1024
+    MAXLINE = 1024,
+    ERROR_FLAG = -1
 };
 
-void handleRequest();
+int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap);
 
 #endif

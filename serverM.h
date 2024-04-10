@@ -19,10 +19,15 @@
 #include <string>
 #include <iostream>
 
-enum {
+enum PORT {
     TCP_PORT = 45089,
     UDP_PORT = 44089,
-    TARGET_UDP_PORT = 41089,// target UDP S server
+    REMOTE_S_PORT = 41089,// target UDP S server
+    REMOTE_D_PORT = 42089,
+    REMOTE_U_PORT = 43089,
+};
+
+enum {
     QUEUE_LIMIT = 5,
     MAXLINE = 1024,
     ERROR_FLAG = -1
@@ -36,8 +41,8 @@ enum AuthCode {
 };
 
 enum UserType {
-    MEMBER,
-    GUEST
+    GUEST,
+    MEMBER
 };
 
 enum RequestType {
@@ -53,8 +58,8 @@ AuthCode checkAuth(const std::unordered_map<std::string, std::string> &map, std:
 
 std::string authToString(AuthCode code);
 
-int forwardToBackendServer(const char*);
+int forwardToBackendServer(int udpSocketFD, sockaddr_in &sockaddr, const std::string &roomcode,  const RequestType &reqCode, UserType userType);
 
-int parseRequest(std::string &requestMsg, std::string &opCode, std::string &roomcode);
+int parseRequest(std::string &requestMsg, RequestType &reqCode, std::string &roomcode);
 
 #endif
