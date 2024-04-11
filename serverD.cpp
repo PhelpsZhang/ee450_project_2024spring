@@ -1,4 +1,5 @@
 #include "serverD.h"
+#define LOCAL_HOST "127.0.0.1"
 
 int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap) {
     // load members from DB to data structure (memory).
@@ -6,7 +7,7 @@ int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap) {
     std::string line;
 
     if (!file) {
-        std::cout << "cannot open file single.txt" << std::endl;
+        std::cout << "cannot open file double.txt" << std::endl;
         return ERROR_FLAG;
     }
 
@@ -43,42 +44,51 @@ int main(){
 
     std::unordered_map<std::string, int> roomInfoMap;
     loadRoomInfo(roomInfoMap);
-    
-    char buffer[MAXLINE];
-    //const char *prompt = "Hello from server S";
-    sockaddr_in serverAddress, clientAddress;
 
-    int serverSSocket = socket(AF_INET, SOCK_DGRAM, 0);
-    // clear possible random garbage data.
+    int udpSocketFD = socket(AF_INET, SOCK_DGRAM, 0);
+
+    // build sockaddr structure.
+    sockaddr_in serverAddress, serverMAddress;
     memset(&serverAddress, 0, sizeof(serverAddress));
-    memset(&clientAddress, 0, sizeof(clientAddress));
-
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_addr.s_addr = INADDR_ANY;
     serverAddress.sin_port = htons(UDP_PORT);
+    inet_pton(AF_INET, LOCAL_HOST, &(serverAddress.sin_addr));
 
     // bind
-    bind(serverSSocket, (const struct sockaddr *)&serverAddress, sizeof(serverAddress));
+    bind(udpSocketFD, (const struct sockaddr *)&serverAddress, sizeof(serverAddress));
 
-    int n;
-    socklen_t len;
-    len = sizeof(clientAddress);
-    char res[20];
-    while(1){
-        n = recvfrom(serverSSocket, (char *)buffer, MAXLINE, MSG_WAITALL,
-                 (struct sockaddr *) &clientAddress, &len);
-        buffer[n] = '\0';
-        std::cout << "Client: " << buffer << std::endl;
-        if(buffer[0] == 'S') {
-            strncpy(res, "Available", sizeof(res) - 1);
-            res[sizeof(res) - 1] = '\0';
-        } else {
-            strncpy(res, "UnAvailable", sizeof(res) - 1);
-            res[sizeof(res) - 1] = '\0';       
-        }
-        sendto(serverSSocket, (const char *)res, strlen(res), MSG_CONFIRM,
-                (const struct sockaddr *) &clientAddress, len);
-        std::cout << "result message sent:" << res << std::endl;
-    }
+    memset(&serverMAddress, 0, sizeof(serverMAddress));
+    serverMAddress.sin_family = AF_INET;
+    serverMAddress.sin_port = htons(REMOTE_UDP_PORT);
+    inet_pton(AF_INET, LOCAL_HOST, &(serverMAddress.sin_addr));
+    socklen_t socklen = sizeof(serverMAddress);
+
+    std::string roomStatus = "roomD";
+    // send message to serverM
+    sendto(udpSocketFD, roomStatus.data(), roomStatus.length(), 0,
+             (const struct sockaddr *) &serverMAddress, socklen);
+
+    // int n;
+    // socklen_t len;
+    // len = sizeof(clientAddress);
+    // char res[20];
+    // while(1){
+    //     n = recvfrom(serverSSocket, (char *)buffer, MAXLINE, 0,
+    //              (struct sockaddr *) &clientAddress, &len);
+    //     buffer[n] = '\0';
+    //     std::cout << "Client: " << buffer << std::endl;
+    //     if(buffer[0] == 'S') {
+    //         strncpy(res, "Available", sizeof(res) - 1);
+    //         res[sizeof(res) - 1] = '\0';
+    //     } else {
+    //         strncpy(res, "UnAvailable", sizeof(res) - 1);
+    //         res[sizeof(res) - 1] = '\0';       
+    //     }
+    //     sendto(serverSSocket, (const char *)res, strlen(res), 0,
+    //             (const struct sockaddr *) &clientAddress, len);
+    //     std::cout << "result message sent:" << res << std::endl;
+    // }
+
+    close(udpSocketFD);
     return 0;
 }

@@ -58,8 +58,10 @@ AuthCode checkAuth(const std::unordered_map<std::string, std::string> &map, std:
 
 std::string authToString(AuthCode code);
 
-int forwardToBackendServer(int udpSocketFD, sockaddr_in &sockaddr, const std::string &roomcode,  const RequestType &reqCode, UserType userType);
+// int forwardToBackendServer(int udpSocketFD, sockaddr_in &sockaddr, const std::string &roomcode,  const RequestType &reqCode, UserType userType);
 
 int parseRequest(std::string &requestMsg, RequestType &reqCode, std::string &roomcode);
+
+int forwardTableBuild(int udpSocketFD, std::unordered_map<char, sockaddr_in> &forwardTable);
 
 #endif

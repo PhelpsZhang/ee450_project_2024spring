@@ -21,6 +21,7 @@
 
 enum {
     UDP_PORT = 41089,
+    REMOTE_UDP_PORT = 44089,
     MAXLINE = 1024,
     ERROR_FLAG = -1
 };

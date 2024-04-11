@@ -125,6 +125,34 @@ int parseRequest(const std::string &requestMsg, RequestType &reqCode, std::strin
     return 0;
 }
 
+int forwardTableBuild(int udpSocketFD, std::unordered_map<char, sockaddr_in> &forwardTable) {
+    sockaddr_in udpUnknownAddress;
+    socklen_t uua_len; 
+    std::string serverTag = "";
+    char buffer[MAXLINE];
+    int recvNum = 0;
+    while (recvNum < 3) {
+        memset(&udpUnknownAddress, 0, sizeof(udpUnknownAddress));
+        memset(buffer, 0, sizeof(buffer));
+        uua_len = sizeof(udpUnknownAddress);
+        int recvSize = recvfrom(udpSocketFD, (char*) buffer, MAXLINE, 0, (struct sockaddr *) &udpUnknownAddress, &uua_len);
+        if (recvSize <= 0) {
+            std::cout << "recv error" << std::endl;
+            break;
+        }
+        buffer[recvSize] = '\0';
+        std::string receivedData(buffer, recvSize);
+        char serverTag = receivedData.back();
+        std::cout << "The main server has received the room status from Server " << serverTag << " using UDP over port " << UDP_PORT << "." << std::endl;
+        forwardTable.insert({receivedData.back(), udpUnknownAddress});
+        recvNum += 1;
+    }
+
+    for (auto x : forwardTable) {
+        std::cout << "code: " << x.first << " sockPort: " << ntohs(x.second.sin_port) << std::endl;
+    }
+    return 0;
+}
 
 int main() {
     std::cout << "The main server is up and running." << std::endl;
@@ -147,21 +175,12 @@ int main() {
         return ERROR_FLAG;
     }
 
-    // initializa UDP remote sockaddr
-    sockaddr_in udpSAddress, udpDAddress, udpUAddress;
-    memset(&udpSAddress, 0, sizeof(udpSAddress));
-    memset(&udpDAddress, 0, sizeof(udpDAddress));
-    memset(&udpUAddress, 0, sizeof(udpUAddress));
-    udpSAddress.sin_family = AF_INET;
-    udpSAddress.sin_port = htons(REMOTE_S_PORT);
-    inet_pton(AF_INET, LOCAL_HOST, &(udpSAddress.sin_addr));
-    udpDAddress.sin_family = AF_INET;
-    udpDAddress.sin_port = htons(REMOTE_D_PORT);
-    inet_pton(AF_INET, LOCAL_HOST, &(udpDAddress.sin_addr));
-    udpUAddress.sin_family = AF_INET;
-    udpUAddress.sin_port = htons(REMOTE_U_PORT);
-    inet_pton(AF_INET, LOCAL_HOST, &(udpUAddress.sin_addr));
+    // forward table build.
+    std::unordered_map<char, sockaddr_in> forwardTable;
+    forwardTableBuild(udpSocketFD, forwardTable);
 
+    // manually build a forward table list. A little cheat.
+    
 
     // create TCP socket;
     int serverSocketFD = socket(AF_INET, SOCK_STREAM, 0);
@@ -249,10 +268,34 @@ int main() {
         RequestType reqType;
         parseRequest(buffer, reqType, roomcode);
         
+        std::string msg2client, data2server;
+        sockaddr_in targetSockaddr;
+        memset(&targetSockaddr, 0, sizeof(targetSockaddr));
         // forward to UDP
-        if (userType == GUEST && reqType == RESERVATION) {
-            // permission denied.
+        // data: requestType + roomcode
+        if (reqType == AVAILABILITY) {
+            std::cout << "The main server has received the availability request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
+            // forward to Backend Server.
+            data2server = "AVAILABILITY:" + roomcode;
+            targetSockaddr = forwardTable[roomcode.at(0)];
+            sendto(udpSocketFD, data2server.data(), data2server.length(), 0,
+                   (const struct sockaddr *) &targetSockaddr, sizeof(targetSockaddr));
+            
+        } else {
+            // reqType == RESERVATION
+            std::cout << "The main server has received the reservation request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
+            if (userType == GUEST) {
+                // permission denied.
+                std::cout << encryptUsername << " cannot make a reservation." << std::endl;
+                msg2client = "Permission denied: Guest cannot make a reservation.";
+                send(serverChildSocketFD, msg2client.data(), msg2client.length(), 0);
+                std::cout << "The main server sent the error message to the client." << std::endl;
+            } else {
+
+            }
         }
+
+        
 
         // add control logic to Which Server
         // forwardToBackendServer(roomcode, reqCode, userType,);
@@ -270,3 +313,18 @@ int main() {
     close(serverSocketFD);
     return 0;
 }
+
+    // initializa UDP remote sockaddr
+    // sockaddr_in udpSAddress, udpDAddress, udpUAddress;
+    // memset(&udpSAddress, 0, sizeof(udpSAddress));
+    // memset(&udpDAddress, 0, sizeof(udpDAddress));
+    // memset(&udpUAddress, 0, sizeof(udpUAddress));
+    // udpSAddress.sin_family = AF_INET;
+    // udpSAddress.sin_port = htons(REMOTE_S_PORT);
+    // inet_pton(AF_INET, LOCAL_HOST, &(udpSAddress.sin_addr));
+    // udpDAddress.sin_family = AF_INET;
+    // udpDAddress.sin_port = htons(REMOTE_D_PORT);
+    // inet_pton(AF_INET, LOCAL_HOST, &(udpDAddress.sin_addr));
+    // udpUAddress.sin_family = AF_INET;
+    // udpUAddress.sin_port = htons(REMOTE_U_PORT);
+    // inet_pton(AF_INET, LOCAL_HOST, &(udpUAddress.sin_addr));
