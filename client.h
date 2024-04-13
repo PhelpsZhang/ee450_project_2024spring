@@ -31,6 +31,13 @@ enum RequestType {
     RESERVATION
 };
 
+enum Res2Client {
+    REFUSE, // guest cannot make a reservation
+    AVAILABLE,
+    UNAVAILABLE,
+    NONEXISTENT
+};
+
 int clientSocketInitialize();
 
 bool checkValid(const std::string& input);
@@ -38,5 +45,7 @@ bool checkValid(const std::string& input);
 void encrypt(const std::string& input, std::string& output);
 
 bool receiveAuth(const std::string responseMsgCode, const std::string username);
+
+void receiveResp(const std::string responseMsgCode, std::string opCode, int localPort, std::string roomcode);
 
 #endif

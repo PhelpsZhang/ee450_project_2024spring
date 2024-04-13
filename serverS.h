@@ -26,6 +26,14 @@ enum {
     ERROR_FLAG = -1
 };
 
+enum Response {
+    AVAILABLE,
+    UNAVAILABLE,
+    NONEXISTENT
+};
+
+std::string ResToString(Response resCode);
+
 int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap);
 
 #endif

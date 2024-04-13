@@ -131,7 +131,7 @@ int forwardTableBuild(int udpSocketFD, std::unordered_map<char, sockaddr_in> &fo
     std::string serverTag = "";
     char buffer[MAXLINE];
     int recvNum = 0;
-    while (recvNum < 3) {
+    while (recvNum < ROOM_TYPE_NUM) {
         memset(&udpUnknownAddress, 0, sizeof(udpUnknownAddress));
         memset(buffer, 0, sizeof(buffer));
         uua_len = sizeof(udpUnknownAddress);
@@ -260,43 +260,91 @@ int main() {
 
     while (true) {
         memset(&buffer, 0, sizeof(buffer));
-        int recvFlag = recv(serverChildSocketFD, buffer, sizeof(buffer), 0);
-        if (recvFlag <= 0) break;
+        int reqFlag = recv(serverChildSocketFD, buffer, sizeof(buffer), 0);
+        if (reqFlag <= 0) break;
         std::cout << "Data received from Client: " << buffer << std::endl;
         std::string opCode;
         std::string roomcode;
         RequestType reqType;
         parseRequest(buffer, reqType, roomcode);
         
-        std::string msg2client, data2server;
+        std::string msg2client, data2server, server2M;
+        char respMsg[MAXLINE];
         sockaddr_in targetSockaddr;
         memset(&targetSockaddr, 0, sizeof(targetSockaddr));
+        targetSockaddr = forwardTable[roomcode.at(0)];
+        socklen_t socklen = sizeof(targetSockaddr);
+        int byteLen;
         // forward to UDP
         // data: requestType + roomcode
+        // ONLY AVAI request and MEMBER's RESERVE request will be forwarded to Backend Server.
         if (reqType == AVAILABILITY) {
             std::cout << "The main server has received the availability request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
             // forward to Backend Server.
             data2server = "AVAILABILITY:" + roomcode;
-            targetSockaddr = forwardTable[roomcode.at(0)];
             sendto(udpSocketFD, data2server.data(), data2server.length(), 0,
-                   (const struct sockaddr *) &targetSockaddr, sizeof(targetSockaddr));
-            
+                   (const struct sockaddr *) &targetSockaddr, socklen);
+            std::cout << "The main server sent a request to Server " << roomcode.at(0) << "." << std::endl;
+
         } else {
             // reqType == RESERVATION
             std::cout << "The main server has received the reservation request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
             if (userType == GUEST) {
                 // permission denied.
                 std::cout << encryptUsername << " cannot make a reservation." << std::endl;
-                msg2client = "Permission denied: Guest cannot make a reservation.";
-                send(serverChildSocketFD, msg2client.data(), msg2client.length(), 0);
+                //msg2client = "Permission denied: Guest cannot make a reservation.";
+                
+                // await to be altered.
+                //send(serverChildSocketFD, msg2client.data(), msg2client.length(), 0);
+
                 std::cout << "The main server sent the error message to the client." << std::endl;
             } else {
-
+                // userType == MEMBER
+                data2server = "RESERVATION:" + roomcode;
+                sendto(udpSocketFD, data2server.data(), data2server.length(), 0,
+                   (const struct sockaddr *) &targetSockaddr, socklen);
+                std::cout << "The main server sent a request to Server " << roomcode.at(0) << "." << std::endl;
             }
         }
 
+        char updateFlag;
+        std::string respCode;
+        std::string opRoomCode;
+        // recv from UDP backend server
+        if (!(userType == GUEST && reqType == RESERVATION)) {
+            
+            byteLen = recvfrom(udpSocketFD, (char *)respMsg, MAXLINE, 0,
+                   (struct sockaddr*)&targetSockaddr, &socklen);
+            respMsg[byteLen] = '\0';
+            std::string respMsgS(respMsg, byteLen);
+            // roomcode contains the serverTag
+            updateFlag = respMsgS.at(0);
+            respCode = respMsgS.substr(1, 3);
+            opRoomCode = respMsgS.substr(4);
+            if (updateFlag == '0') {
+                std::cout << "The main server received the response from Server " << opRoomCode.at(0) << " using UDP over port " << UDP_PORT << "." << std::endl;
+            } else {
+                std::cout << "The main server received the response and the updated room status from Server " << opRoomCode.at(0) << " using UDP over port" << UDP_PORT << "." << std::endl;
+                std::cout << "The room status of Room " << opRoomCode << " has been updated." << std::endl;
+                // send to client
+            }
+        } else {
+            // when no forward, no receive.
+            updateFlag = '0';
+            respCode = "500";
+            opRoomCode = roomcode;
+            // to be altered
+        }
+        std::string res2client = updateFlag + respCode + opRoomCode;
+        // Maybe distinguish the send() and display.
+        // send back to the client
+        send(serverChildSocketFD, res2client.data(), res2client.length(), 0);
+        if (reqType == RESERVATION) {
+            std::cout << "The main server sent the reservation result to the client." << std::endl;
+        } else {
+            std::cout << "The main server sent the availability information to the client." << std::endl;
+        }
         
-
         // add control logic to Which Server
         // forwardToBackendServer(roomcode, reqCode, userType,);
     }

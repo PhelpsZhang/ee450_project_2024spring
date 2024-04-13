@@ -1,7 +1,6 @@
 #ifndef SERVER_U_H
 #define SERVER_U_H
 
-
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
@@ -21,13 +20,20 @@
 #include<string>
 
 enum {
-    UDP_PORT = 43089,
+    UDP_PORT = 41089,
     REMOTE_UDP_PORT = 44089,
     MAXLINE = 1024,
     ERROR_FLAG = -1
 };
 
-int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap);
+enum Response {
+    AVAILABLE,
+    UNAVAILABLE,
+    NONEXISTENT
+};
 
+std::string ResToString(Response resCode);
+
+int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap);
 
 #endif

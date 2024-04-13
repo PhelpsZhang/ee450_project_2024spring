@@ -44,6 +44,42 @@ bool receiveAuth(const std::string responseMsgCode, const std::string username) 
     return false;
 }
 
+
+void receiveResp(const std::string responseMsgCode, std::string opCode, int localPort, std::string roomcode) {
+    std::string displayMsg;
+    if (responseMsgCode == "500") {
+        displayMsg = "Permission denied: Guest cannot make a reservation.";
+    } else if (responseMsgCode == "600") {
+        // success. avai or reserva?
+        if (opCode == "Availability") 
+            displayMsg = "The client received the response from the main server using TCP over port " + std::to_string(localPort) +
+                        "\nThe requested room is available.\n\n" +
+                        "-----Start a new request-----";
+        else 
+            displayMsg = "The client received the response from the main server using TCP over port " + std::to_string(localPort) + 
+                        "\nCongratulation! The reservation for Room " + roomcode + " has been made.\n\n" +
+                        "-----Start a new request-----";
+    } else if (responseMsgCode == "700") {
+        if (opCode == "Availability")
+        displayMsg = "The client received the response from the main server using TCP over port " + std::to_string(localPort) + 
+                        "\nThe requested room is not available.\n\n" +
+                        "-----Start a new request-----";
+        else 
+            displayMsg = "The client received the response from the main server using TCP over port " + std::to_string(localPort) + 
+                        "\nSorry! The requested room is not available.\n\n" +
+                        "-----Start a new request-----";
+    } else if (responseMsgCode == "800") {
+        if (opCode == "Availability")
+            displayMsg = "The client received the response from the main server using TCP over port " + std::to_string(localPort) + 
+                        "\nNot able to find the room layout.\n\n" +
+                        "-----Start a new request-----";
+        else
+            displayMsg = "The client received the response from the main server using TCP over port " + std::to_string(localPort) +  
+                        "\nOops! Not able to find the room.\n\n" +
+                        "-----Start a new request-----";
+    }
+    std::cout << displayMsg << std::endl;
+}
 /*
 Client - TCP Socket
 Create Socket - socket()
@@ -157,7 +193,8 @@ int clientSocketInitialize(){
             if (userType == GUEST) {
                 // Actually, we don't have to send request.
                 std::cout << username << " sent a reservation request to the main server." << std::endl;
-                std::cout << "Perssion denied: Guest cannot make a reservation." << std::endl;
+                // std::cout << "Perssion denied: Guest cannot make a reservation." << std::endl;
+                send(clientSocketFD, RequestMsg.data(), RequestMsg.length(), 0);
             } else {
                 // send an reservation
                 send(clientSocketFD, RequestMsg.data(), RequestMsg.length(), 0);
@@ -165,6 +202,11 @@ int clientSocketInitialize(){
             }
         }
         // send request
+        char recvRes[1024] = {};
+        int byteLen = recv(clientSocketFD, recvRes, 1024, 0);
+        recvRes[byteLen] = '\0';
+        std::string responseMsgCode(recvRes, byteLen);
+        receiveResp(responseMsgCode.substr(1,3), opCode, localPort, roomCode);
 
     }
 

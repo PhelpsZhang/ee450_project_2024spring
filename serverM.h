@@ -30,7 +30,8 @@ enum PORT {
 enum {
     QUEUE_LIMIT = 5,
     MAXLINE = 1024,
-    ERROR_FLAG = -1
+    ERROR_FLAG = -1,
+    ROOM_TYPE_NUM = 3
 };
 
 enum AuthCode {

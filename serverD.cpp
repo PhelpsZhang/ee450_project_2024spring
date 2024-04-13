@@ -1,6 +1,15 @@
 #include "serverD.h"
 #define LOCAL_HOST "127.0.0.1"
 
+std::string ResToString(Response resCode) {
+    switch (resCode) {
+        case AVAILABLE: return "600";
+        case UNAVAILABLE: return "700";
+        case NONEXISTENT: return "800";
+        default: return "error";
+    }
+}
+
 int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap) {
     // load members from DB to data structure (memory).
     std::ifstream file("double.txt");
@@ -68,26 +77,62 @@ int main(){
     sendto(udpSocketFD, roomStatus.data(), roomStatus.length(), 0,
              (const struct sockaddr *) &serverMAddress, socklen);
 
-    // int n;
-    // socklen_t len;
-    // len = sizeof(clientAddress);
-    // char res[20];
-    // while(1){
-    //     n = recvfrom(serverSSocket, (char *)buffer, MAXLINE, 0,
-    //              (struct sockaddr *) &clientAddress, &len);
-    //     buffer[n] = '\0';
-    //     std::cout << "Client: " << buffer << std::endl;
-    //     if(buffer[0] == 'S') {
-    //         strncpy(res, "Available", sizeof(res) - 1);
-    //         res[sizeof(res) - 1] = '\0';
-    //     } else {
-    //         strncpy(res, "UnAvailable", sizeof(res) - 1);
-    //         res[sizeof(res) - 1] = '\0';       
-    //     }
-    //     sendto(serverSSocket, (const char *)res, strlen(res), 0,
-    //             (const struct sockaddr *) &clientAddress, len);
-    //     std::cout << "result message sent:" << res << std::endl;
-    // }
+
+    char buffer[MAXLINE];
+    while (true) {
+        int byteLen = recvfrom(udpSocketFD, (char*) buffer, MAXLINE, 0,
+                (struct sockaddr*)&serverMAddress, &socklen);
+        buffer[byteLen] = '\0';
+        std::string req(buffer, byteLen);
+        size_t pos = req.find(':');
+        std::string opCode = req.substr(0, pos);
+        std::string roomcode = req.substr(pos+1);
+        std::string responseMsg = "0";  // 0 represent for roomstatus No Updated
+        Response resCode;
+        auto it = roomInfoMap.find(roomcode);
+        int count = 0;
+        if (it == roomInfoMap.end()) {
+            resCode = NONEXISTENT;
+        } else {
+            count = it->second;
+            if (count == 0) {
+                resCode = UNAVAILABLE;
+            } else {
+                // count > 0
+                resCode = AVAILABLE;
+            }
+        }
+        if (opCode == "AVAILABILITY") {
+            std::cout << "The Server D received an availability request from the main server." << std::endl;
+            if (resCode == NONEXISTENT) {
+                std::cout << "Not able to find the room layout." << std::endl;
+            } else if (resCode == UNAVAILABLE) {
+                std::cout << "Room " << roomcode << " is not available." << std::endl;
+            } else {
+                std::cout << "Room " << roomcode << " is available." << std::endl;
+            }
+        } else {
+            std::cout << "The Server D received an reservation request from the main server." << std::endl;
+            if (resCode == NONEXISTENT) {
+                std::cout << "Cannot make a reservation. Not able to find the room layout." << std::endl;
+            } else if (resCode == UNAVAILABLE) {
+                std::cout << "Cannot make a reservation. Room " << roomcode << " is not available." << std::endl;
+            } else {
+                it->second -= 1;
+                count -= 1;
+                responseMsg = "1";
+                std::cout << "Successful reservation. The count of Room " << roomcode << " is now " << count << "." << std::endl;
+            }
+        }
+        responseMsg = responseMsg + ResToString(resCode) + roomcode;
+        // updatedOrNot + responseMsg + roomcode
+        sendto(udpSocketFD, responseMsg.data(), responseMsg.length(), 0,
+                (const struct sockaddr *)&serverMAddress, socklen);
+        if (responseMsg.at(0) == '0')
+            std::cout << "The Server D finished sending the response to the main server." << std::endl;
+        else
+            std::cout << "The Server D finished sending the response and the updated room status to the main server." << std::endl;
+    }
 
     close(udpSocketFD);
     return 0;
