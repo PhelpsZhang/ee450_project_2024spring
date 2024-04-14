@@ -178,10 +178,49 @@ int main() {
     // forward table build.
     std::unordered_map<char, sockaddr_in> forwardTable;
     forwardTableBuild(udpSocketFD, forwardTable);
-
     // manually build a forward table list. A little cheat.
-    
 
+    // messege queue setup
+    const char* QUEUE_NAME_BASE = "/UDP_RES_";
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        // child UDP process
+        // Be responsible for receiving the Data from backend Server and sending to Child Process(by MQ).
+        sockaddr_in recvSocketAddress;
+        while (true) {
+            char buffer[MAXLINE];
+            memset(&recvSocketAddress, 0, sizeof(recvSocketAddress));
+            socklen_t recvLen = sizeof(recvSocketAddress);
+            int n = recvfrom(udpSocketFD, (char *)buffer, MAXLINE, 0,
+                    (struct sockaddr *)&recvSocketAddress, &recvLen);
+            buffer[n] = '\0';
+            std::string recvMsg(buffer, n);
+            std::cout << "UDP recvMsg size: " << recvMsg.length() << std::endl;
+            // determine to mq_send to which MQ.
+            // rescode:roomcode:queueName
+            size_t pos = recvMsg.find('/');
+            std::string mqName = recvMsg.substr(pos);
+            std::cout << "recv from backend, mqName: " << mqName << std::endl;
+            mqd_t mq = mq_open(mqName.data(), O_CREAT | O_RDWR, 0666, NULL);
+            if (mq == (mqd_t)-1) {
+                perror("mq_open");
+                break;
+            }
+            if (-1 == mq_send(mq, recvMsg.data(), recvMsg.length(), 0)) {
+                perror("mq_send");
+                mq_close(mq);
+                break;
+            }
+            std::cout << "UDP response sent to MQ successfully." << std::endl;
+            mq_close(mq);
+        }
+        exit(0);
+    } else if (pid < 0) {
+        perror("first fork failed");
+    }
+    // parent (Main Process)
+    
     // create TCP socket;
     int serverSocketFD = socket(AF_INET, SOCK_STREAM, 0);
     if(ERROR_FLAG == serverSocketFD) {
@@ -214,165 +253,183 @@ int main() {
     sockaddr_in clientSocketAddress;
     socklen_t clientAddrLen = sizeof(clientSocketAddress);
     memset(&clientSocketAddress, 0, clientAddrLen);
-    // accepting connection request
-    int serverChildSocketFD = accept(serverSocketFD, (struct sockaddr *)&clientSocketAddress, &clientAddrLen);
-    // child socket created, receiving data
-    if (ERROR_FLAG == serverChildSocketFD) {
-        std::cout << "Socket accept Failed." << std::endl;
-        return ERROR_FLAG;       
-    }
 
-    // recv(), -1, error; 0, connect down; x, bytes length
-    std::string encryptUsername, encryptPassword;
-
-    recvAuthMessage(serverChildSocketFD, encryptUsername);
-    recvAuthMessage(serverChildSocketFD, encryptPassword);
-
-    // distinguish the userType
-    UserType userType = encryptPassword.length() == 0 ? GUEST : MEMBER;
-    // member!!! need if
-    // need distinguish UserType and Request Type
-    if (MEMBER == userType) 
-        std::cout << "The main server received the authentication for " << encryptUsername << " using TCP over port " << TCP_PORT << std::endl;
-    else {
-        std::cout << "The main server received the guest request for " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
-        std::cout << "The main server accepts " << encryptUsername << " as a guest" << std::endl;
-    }
-        
-    // std::cout << "read username: " << encryptUsername << std::endl;
-    // std::cout << "read password: " << encryptPassword << std::endl;
-
-    // check Authentication and send response. Do with both guest and member.
-    AuthCode resCode = checkAuth(credentials, encryptUsername, encryptPassword);
-    std::string responseAuthMsg = authToString(resCode);
-    // std::cout << "responseAuthMsg " << responseAuthMsg << std::endl;
-    send(serverChildSocketFD, responseAuthMsg.data(), responseAuthMsg.length(), 0);
-    std::cout << "The main server sent the authentication result to the client. " << std::endl;
-
-    // only when one passes authentication, continue to execute the code.
-    // Maybe change to while.
-
-    char buffer[1024] = {};
-    
-    if (resCode == WRONG_USER || resCode == WRONG_PASS) {
-        std::cout << "Wrong Auth. maybe abnormal shut down." << std::endl;
-    }
-
+    int childNumber = 0;
     while (true) {
-        memset(&buffer, 0, sizeof(buffer));
-        int reqFlag = recv(serverChildSocketFD, buffer, sizeof(buffer), 0);
-        if (reqFlag <= 0) break;
-        std::cout << "Data received from Client: " << buffer << std::endl;
-        std::string opCode;
-        std::string roomcode;
-        RequestType reqType;
-        parseRequest(buffer, reqType, roomcode);
-        
-        std::string msg2client, data2server, server2M;
-        char respMsg[MAXLINE];
-        sockaddr_in targetSockaddr;
-        memset(&targetSockaddr, 0, sizeof(targetSockaddr));
-        targetSockaddr = forwardTable[roomcode.at(0)];
-        socklen_t socklen = sizeof(targetSockaddr);
-        int byteLen;
-        // forward to UDP
-        // data: requestType + roomcode
-        // ONLY AVAI request and MEMBER's RESERVE request will be forwarded to Backend Server.
-        if (reqType == AVAILABILITY) {
-            std::cout << "The main server has received the availability request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
-            // forward to Backend Server.
-            data2server = "AVAILABILITY:" + roomcode;
-            sendto(udpSocketFD, data2server.data(), data2server.length(), 0,
-                   (const struct sockaddr *) &targetSockaddr, socklen);
-            std::cout << "The main server sent a request to Server " << roomcode.at(0) << "." << std::endl;
-
-        } else {
-            // reqType == RESERVATION
-            std::cout << "The main server has received the reservation request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
-            if (userType == GUEST) {
-                // permission denied.
-                std::cout << encryptUsername << " cannot make a reservation." << std::endl;
-                //msg2client = "Permission denied: Guest cannot make a reservation.";
-                
-                // await to be altered.
-                //send(serverChildSocketFD, msg2client.data(), msg2client.length(), 0);
-
-                std::cout << "The main server sent the error message to the client." << std::endl;
-            } else {
-                // userType == MEMBER
-                data2server = "RESERVATION:" + roomcode;
-                sendto(udpSocketFD, data2server.data(), data2server.length(), 0,
-                   (const struct sockaddr *) &targetSockaddr, socklen);
-                std::cout << "The main server sent a request to Server " << roomcode.at(0) << "." << std::endl;
-            }
+        // main accept loop.
+        int serverChildSocketFD = accept(serverSocketFD, (struct sockaddr *)&clientSocketAddress, &clientAddrLen);
+        // child socket created, receiving data
+        if (ERROR_FLAG == serverChildSocketFD) {
+            std::cout << "Socket accept Failed." << std::endl;
+            return ERROR_FLAG;       
         }
+        childNumber += 1;
+        pid_t pid = fork();
 
-        char updateFlag;
-        std::string respCode;
-        std::string opRoomCode;
-        // recv from UDP backend server
-        if (!(userType == GUEST && reqType == RESERVATION)) {
+        if (pid == 0) {
+            // child process.
+            // Close parent socket. It doesn't have to keep listening.
+            close(serverSocketFD);
+
+            // should set the MQ here...
+            // struct mq_attr attr;
+            // attr.mq_flags = 0;
+            // attr.mq_maxmsg = 10;
+            // attr.mq_msgsize = 1024;
+            // attr.mq_curmsgs = 0;
+            std::string queueName = QUEUE_NAME_BASE + std::to_string(getpid());
+            mqd_t mq = mq_open(queueName.data(), O_CREAT | O_RDWR, 0666, NULL);
+            if (mq == (mqd_t)-1) {
+                perror("mq_open");
+                exit(1);
+            }
+
+            struct mq_attr attr;
+            if (mq_getattr(mq, &attr) != -1) {
+                std::cout << "Max message size in the queue: " << attr.mq_msgsize << std::endl;
+            } else {
+                std::cout <<"failed to get message queue attr" << std::endl;
+            }
+
+            // recv(), -1, error; 0, connect down; x, bytes length
+            std::string encryptUsername, encryptPassword;
+
+            recvAuthMessage(serverChildSocketFD, encryptUsername);
+            recvAuthMessage(serverChildSocketFD, encryptPassword);
+
+            // distinguish the userType
+            UserType userType = encryptPassword.length() == 0 ? GUEST : MEMBER;
+            // member!!! need if
+            // need distinguish UserType and Request Type
+            if (MEMBER == userType) 
+                std::cout << "The main server received the authentication for " << encryptUsername << " using TCP over port " << TCP_PORT << std::endl;
+            else {
+                std::cout << "The main server received the guest request for " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
+                std::cout << "The main server accepts " << encryptUsername << " as a guest" << std::endl;
+            }
+
+            // check Authentication and send response. Do with both guest and member.
+            AuthCode resCode = checkAuth(credentials, encryptUsername, encryptPassword);
+            std::string responseAuthMsg = authToString(resCode);
+            // std::cout << "responseAuthMsg " << responseAuthMsg << std::endl;
+            send(serverChildSocketFD, responseAuthMsg.data(), responseAuthMsg.length(), 0);
+            std::cout << "The main server sent the authentication result to the client. " << std::endl;
+
+            // only when one passes authentication, continue to execute the code.
+            // Maybe change to while.
+
+            char buffer[MAXLINE*8] = {};
             
-            byteLen = recvfrom(udpSocketFD, (char *)respMsg, MAXLINE, 0,
-                   (struct sockaddr*)&targetSockaddr, &socklen);
-            respMsg[byteLen] = '\0';
-            std::string respMsgS(respMsg, byteLen);
-            // roomcode contains the serverTag
-            updateFlag = respMsgS.at(0);
-            respCode = respMsgS.substr(1, 3);
-            opRoomCode = respMsgS.substr(4);
-            if (updateFlag == '0') {
-                std::cout << "The main server received the response from Server " << opRoomCode.at(0) << " using UDP over port " << UDP_PORT << "." << std::endl;
-            } else {
-                std::cout << "The main server received the response and the updated room status from Server " << opRoomCode.at(0) << " using UDP over port" << UDP_PORT << "." << std::endl;
-                std::cout << "The room status of Room " << opRoomCode << " has been updated." << std::endl;
-                // send to client
+            if (resCode == WRONG_USER || resCode == WRONG_PASS) {
+                std::cout << "Wrong Auth. maybe abnormal shut down." << std::endl;
+                exit(1);
+                // change Auth procedure to Loop to enhance the robust.
             }
-        } else {
-            // when no forward, no receive.
-            updateFlag = '0';
-            respCode = "500";
-            opRoomCode = roomcode;
-            // to be altered
-        }
-        std::string res2client = updateFlag + respCode + opRoomCode;
-        // Maybe distinguish the send() and display.
-        // send back to the client
-        send(serverChildSocketFD, res2client.data(), res2client.length(), 0);
-        if (reqType == RESERVATION) {
-            std::cout << "The main server sent the reservation result to the client." << std::endl;
-        } else {
-            std::cout << "The main server sent the availability information to the client." << std::endl;
-        }
-        
-        // add control logic to Which Server
-        // forwardToBackendServer(roomcode, reqCode, userType,);
-    }
 
-    // while(1){
-    //     memset(&buffer, 0, sizeof(buffer));
-    //     int recvFlag = recv(serverChildSocket, buffer, sizeof(buffer), 0);
-    //     if (recvFlag <= 0) break;
-    //     std::cout << "Data received from Client: " << buffer << std::endl;
-    //     // add control logic to Which Server
-    //     forwardToBackendServer(buffer);
-    // }
-    close(serverChildSocketFD);
+            while (true) {
+                // Start Request Loop
+                memset(&buffer, 0, MAXLINE);
+                int reqFlag = recv(serverChildSocketFD, buffer, MAXLINE, 0);
+                if (reqFlag <= 0) break;
+                std::cout << "Data received from Client: " << buffer << std::endl;
+                std::string opCode;
+                std::string roomcode;
+                RequestType reqType;
+                parseRequest(buffer, reqType, roomcode);
+                
+                std::string msg2client, data2server, server2M;
+                char respMsg[MAX_MSGSIZE];
+                sockaddr_in targetSockaddr;
+                memset(&targetSockaddr, 0, sizeof(targetSockaddr));
+                targetSockaddr = forwardTable[roomcode.at(0)];
+                socklen_t socklen = sizeof(targetSockaddr);
+                // forward to UDP
+                // data: requestType + roomcode
+                // ONLY AVAI request and MEMBER's RESERVE request will be forwarded to Backend Server.
+                if (reqType == AVAILABILITY) {
+                    std::cout << "The main server has received the availability request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
+                    // forward to Backend Server.
+                    data2server = "AVAILABILITY:" + roomcode + ":" + queueName;
+                    sendto(udpSocketFD, data2server.data(), data2server.length(), 0,
+                        (const struct sockaddr *) &targetSockaddr, socklen);
+                    std::cout << "The main server sent a request to Server " << roomcode.at(0) << "." << std::endl;
+
+                } else {
+                    // reqType == RESERVATION
+                    std::cout << "The main server has received the reservation request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
+                    if (userType == GUEST) {
+                        // permission denied.
+                        std::cout << encryptUsername << " cannot make a reservation." << std::endl;
+                        std::cout << "The main server sent the error message to the client." << std::endl;
+                    } else {
+                        // userType == MEMBER
+                        data2server = "RESERVATION:" + roomcode + ":" + queueName;
+                        sendto(udpSocketFD, data2server.data(), data2server.length(), 0,
+                        (const struct sockaddr *) &targetSockaddr, socklen);
+                        std::cout << "The main server sent a request to Server " << roomcode.at(0) << "." << std::endl;
+                    }
+                }
+
+                std::string respCode;
+                std::string opRoomCode;
+                std::string clientMqId;
+                // recv from UDP backend server
+                if (!(userType == GUEST && reqType == RESERVATION)) {
+                    unsigned int priority;
+                    ssize_t bytesRead;
+                    bytesRead = mq_receive(mq, (char *)respMsg, MAX_MSGSIZE, &priority);
+                    if (bytesRead < 0) {
+                        perror("mq_receive");
+                        mq_close(mq);
+                        continue;
+                    }
+                    // else
+                    std::string respMsgS(respMsg, bytesRead);
+                    // roomcode contains the serverTag
+                    std::istringstream iss(respMsgS);
+                    std::getline(iss, respCode, ':');
+                    std::getline(iss, opRoomCode, ':');
+                    std::getline(iss, clientMqId, ':');
+                    // clientMqId shoud be equal to queueName
+                    std::cout << "recvMqId: " << clientMqId << " queueName: " << queueName << std::endl;
+                    if (respCode == "600" && reqType == RESERVATION) {
+                        std::cout << "The main server received the response and the updated room status from Server " << opRoomCode.at(0) << " using UDP over port" << UDP_PORT << "." << std::endl;
+                        std::cout << "The room status of Room " << opRoomCode << " has been updated." << std::endl;
+                        // send to client
+                    } else {
+                        std::cout << "The main server received the response from Server " << opRoomCode.at(0) << " using UDP over port " << UDP_PORT << "." << std::endl;
+                    }
+                } else {
+                    // when no forward, no receive.
+                    respCode = "500";
+                    opRoomCode = roomcode;
+                    // to be altered
+                }
+                std::string res2client = respCode + opRoomCode;
+                // Maybe distinguish the send() and display.
+                // send back to the client
+                send(serverChildSocketFD, res2client.data(), res2client.length(), 0);
+                if (reqType == RESERVATION) {
+                    std::cout << "The main server sent the reservation result to the client." << std::endl;
+                } else {
+                    std::cout << "The main server sent the availability information to the client." << std::endl;
+                }
+                
+                // add control logic to Which Server
+                // forwardToBackendServer(roomcode, reqCode, userType,);
+            }
+            mq_close(mq);
+            mq_unlink(queueName.data());
+            exit(0);
+            // exit the child process
+        } else if (pid > 0){
+            // parent process
+            close(serverChildSocketFD);
+        } else {
+            perror("fork failed");
+            close(serverChildSocketFD);
+        }
+    }
     close(serverSocketFD);
     return 0;
 }
-
-    // initializa UDP remote sockaddr
-    // sockaddr_in udpSAddress, udpDAddress, udpUAddress;
-    // memset(&udpSAddress, 0, sizeof(udpSAddress));
-    // memset(&udpDAddress, 0, sizeof(udpDAddress));
-    // memset(&udpUAddress, 0, sizeof(udpUAddress));
-    // udpSAddress.sin_family = AF_INET;
-    // udpSAddress.sin_port = htons(REMOTE_S_PORT);
-    // inet_pton(AF_INET, LOCAL_HOST, &(udpSAddress.sin_addr));
-    // udpDAddress.sin_family = AF_INET;
-    // udpDAddress.sin_port = htons(REMOTE_D_PORT);
-    // inet_pton(AF_INET, LOCAL_HOST, &(udpDAddress.sin_addr));
-    // udpUAddress.sin_family = AF_INET;
-    // udpUAddress.sin_port = htons(REMOTE_U_PORT);
-    // inet_pton(AF_INET, LOCAL_HOST, &(udpUAddress.sin_addr));

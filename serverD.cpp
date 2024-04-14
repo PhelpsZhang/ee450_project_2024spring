@@ -84,21 +84,21 @@ int main(){
                 (struct sockaddr*)&serverMAddress, &socklen);
         buffer[byteLen] = '\0';
         std::string req(buffer, byteLen);
-        size_t pos = req.find(':');
-        std::string opCode = req.substr(0, pos);
-        std::string roomcode = req.substr(pos+1);
-        std::string responseMsg = "0";  // 0 represent for roomstatus No Updated
+        std::istringstream iss(req);
+        std::string opCode, roomcode, clientMqId;
+        std::getline(iss, opCode, ':');
+        std::getline(iss, roomcode, ':');
+        std::getline(iss, clientMqId, ':');
+        std::string responseMsg;
         Response resCode;
         auto it = roomInfoMap.find(roomcode);
-        int count = 0;
+        bool updateFlag = false;
         if (it == roomInfoMap.end()) {
             resCode = NONEXISTENT;
         } else {
-            count = it->second;
-            if (count == 0) {
+            if (it->second == 0) {
                 resCode = UNAVAILABLE;
             } else {
-                // count > 0
                 resCode = AVAILABLE;
             }
         }
@@ -119,16 +119,15 @@ int main(){
                 std::cout << "Cannot make a reservation. Room " << roomcode << " is not available." << std::endl;
             } else {
                 it->second -= 1;
-                count -= 1;
-                responseMsg = "1";
-                std::cout << "Successful reservation. The count of Room " << roomcode << " is now " << count << "." << std::endl;
+                updateFlag = true;
+                std::cout << "Successful reservation. The count of Room "<< roomcode << " is now " << it->second << "." << std::endl;
             }
         }
-        responseMsg = responseMsg + ResToString(resCode) + roomcode;
+        responseMsg = ResToString(resCode) + ":" + roomcode + ":" + clientMqId;
         // updatedOrNot + responseMsg + roomcode
         sendto(udpSocketFD, responseMsg.data(), responseMsg.length(), 0,
                 (const struct sockaddr *)&serverMAddress, socklen);
-        if (responseMsg.at(0) == '0')
+        if (!updateFlag)
             std::cout << "The Server D finished sending the response to the main server." << std::endl;
         else
             std::cout << "The Server D finished sending the response and the updated room status to the main server." << std::endl;

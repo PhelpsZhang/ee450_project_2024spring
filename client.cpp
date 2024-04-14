@@ -206,7 +206,7 @@ int clientSocketInitialize(){
         int byteLen = recv(clientSocketFD, recvRes, 1024, 0);
         recvRes[byteLen] = '\0';
         std::string responseMsgCode(recvRes, byteLen);
-        receiveResp(responseMsgCode.substr(1,3), opCode, localPort, roomCode);
+        receiveResp(responseMsgCode.substr(0,3), opCode, localPort, roomCode);
 
     }
 
