@@ -12,6 +12,7 @@
 #include<sys/socket.h>
 #include<arpa/inet.h>
 #include<sys/wait.h>
+#include <mqueue.h>
 
 #include <fstream>
 #include <sstream>
@@ -30,6 +31,7 @@ enum PORT {
 enum {
     QUEUE_LIMIT = 5,
     MAXLINE = 1024,
+    MAX_MSGSIZE = 8192,
     ERROR_FLAG = -1,
     ROOM_TYPE_NUM = 3
 };

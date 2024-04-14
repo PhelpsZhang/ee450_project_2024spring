@@ -4,12 +4,15 @@ CXX=g++
 # define option, -Wall warning, -g debugging info
 CXXFLAGS=-Wall -g -std=c++11
 
+# define link
+LIBS=-lrt
+
 # target
 all: client serverM serverS serverD serverU
 
 # serverM compiling rule
 serverM: serverM.o
-	$(CXX) $(CXXFLAGS) -o serverM serverM.o
+	$(CXX) $(CXXFLAGS) -o serverM serverM.o $(LIBS)
 
 # serverS compiling rule
 serverS: serverS.o
