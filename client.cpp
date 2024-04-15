@@ -48,7 +48,7 @@ bool receiveAuth(const std::string responseMsgCode, const std::string username) 
 void receiveResp(const std::string responseMsgCode, std::string opCode, int localPort, std::string roomcode) {
     std::string displayMsg;
     if (responseMsgCode == "500") {
-        displayMsg = "Permission denied: Guest cannot make a reservation.";
+        displayMsg = "Permission denied: Guest cannot make a reservation.\n\n-----Start a new request-----";
     } else if (responseMsgCode == "600") {
         // success. avai or reserva?
         if (opCode == "Availability") 

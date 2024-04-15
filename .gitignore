@@ -1,7 +1,3 @@
-# ignore .o and .obj
-*.o
-*.obj
-
 # ignore executable file, etc.
 *
 !*.c
@@ -11,5 +7,5 @@
 !*.txt
 !*.md
 !/.gitignore
-
+!*.sh
 .DS_Store

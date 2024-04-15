@@ -12,10 +12,7 @@ Data Transfer - myHandleFunction()
 Handle Request - myHandleFunction()
     - Create Child Socket - Fork()?
 Destory Socket - close()
-*/
-
-
-/*
+------------------------------------------
 Client - UDP Socket
 Create Socket - socket()
 Connect - connect()
@@ -49,11 +46,10 @@ int loadMember(std::unordered_map<std::string, std::string> &credentials) {
     }
 
     file.close();
-
     
-    for (auto it = credentials.begin(); it != credentials.end(); ++it) {
-        std::cout << "username:" << it->first << it->second << std::endl;
-    }
+    // for (auto it = credentials.begin(); it != credentials.end(); ++it) {
+    //     std::cout << "username:" << it->first << it->second << std::endl;
+    // }
     return 0;
 }
 
@@ -137,7 +133,7 @@ int forwardTableBuild(int udpSocketFD, std::unordered_map<char, sockaddr_in> &fo
         uua_len = sizeof(udpUnknownAddress);
         int recvSize = recvfrom(udpSocketFD, (char*) buffer, MAXLINE, 0, (struct sockaddr *) &udpUnknownAddress, &uua_len);
         if (recvSize <= 0) {
-            std::cout << "recv error" << std::endl;
+            std::cout << "recv roomstatus from UDP failed." << std::endl;
             break;
         }
         buffer[recvSize] = '\0';
@@ -196,36 +192,50 @@ int main() {
                     (struct sockaddr *)&recvSocketAddress, &recvLen);
             buffer[n] = '\0';
             std::string recvMsg(buffer, n);
-            std::cout << "UDP recvMsg size: " << recvMsg.length() << std::endl;
+            // std::cout << "UDP recvMsg size: " << recvMsg.length() << std::endl;
             // determine to mq_send to which MQ.
             // rescode:roomcode:queueName
             size_t pos = recvMsg.find('/');
             std::string mqName = recvMsg.substr(pos);
-            std::cout << "recv from backend, mqName: " << mqName << std::endl;
+            // std::cout << "recv from backend, mqName: " << mqName << std::endl;
             mqd_t mq = mq_open(mqName.data(), O_CREAT | O_RDWR, 0666, NULL);
             if (mq == (mqd_t)-1) {
+                std::cout << "UDP process MQ open fail." << std::endl;
                 perror("mq_open");
+                mq_close(mq);
+                mq_unlink(mqName.data());
                 break;
             }
             if (-1 == mq_send(mq, recvMsg.data(), recvMsg.length(), 0)) {
+                std::cout << "UDP process MQ send fail." << std::endl;
                 perror("mq_send");
                 mq_close(mq);
+                mq_unlink(mqName.data());
                 break;
             }
-            std::cout << "UDP response sent to MQ successfully." << std::endl;
+            // std::cout << "UDP response sent to MQ successfully." << std::endl;
+            // UDP process isnot responsibile for mq_unlink
             mq_close(mq);
         }
         exit(0);
     } else if (pid < 0) {
-        perror("first fork failed");
+        perror("Fork Failed");
     }
     // parent (Main Process)
     
     // create TCP socket;
     int serverSocketFD = socket(AF_INET, SOCK_STREAM, 0);
     if(ERROR_FLAG == serverSocketFD) {
-        std::cout << "Socket FD Failed." << std::endl;
+        std::cout << "TCP Socket FD creation Failed." << std::endl;
         return ERROR_FLAG;
+    }
+
+    // Avoid bind failed. Allow bind() in TIME_WAIT status.
+    int yes = 1;
+    if (setsockopt(serverSocketFD, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
+        std::cout << "Failed to set SO_REUSEADDR." << std::endl;
+        close(serverSocketFD);
+        return -1;
     }
 
     // prepare socket address struct.
@@ -238,15 +248,16 @@ int main() {
 
     // bind socket to local (socket, address(IP+portNumber), length)
     // add some error check 
+
     if (ERROR_FLAG == bind(serverSocketFD, (struct sockaddr*)&serverSocketAddress, sizeof(serverSocketAddress))) {
-        std::cout << "Socket bind Failed." << std::endl;
+        std::cout << "TCP Socket bind Failed." << std::endl;
         return ERROR_FLAG;
     }
 
     // listening to assigned socket
     // add error check
     if (ERROR_FLAG == listen(serverSocketFD, QUEUE_LIMIT)) {
-        std::cout << "Socket listen Failed." << std::endl;
+        std::cout << "TCP Socket listen Failed." << std::endl;
         return ERROR_FLAG;  
     }
     
@@ -260,7 +271,7 @@ int main() {
         int serverChildSocketFD = accept(serverSocketFD, (struct sockaddr *)&clientSocketAddress, &clientAddrLen);
         // child socket created, receiving data
         if (ERROR_FLAG == serverChildSocketFD) {
-            std::cout << "Socket accept Failed." << std::endl;
+            std::cout << "TCP Socket accept Failed." << std::endl;
             return ERROR_FLAG;       
         }
         childNumber += 1;
@@ -277,19 +288,16 @@ int main() {
             // attr.mq_maxmsg = 10;
             // attr.mq_msgsize = 1024;
             // attr.mq_curmsgs = 0;
-            std::string queueName = QUEUE_NAME_BASE + std::to_string(getpid());
-            mqd_t mq = mq_open(queueName.data(), O_CREAT | O_RDWR, 0666, NULL);
-            if (mq == (mqd_t)-1) {
-                perror("mq_open");
-                exit(1);
-            }
 
-            struct mq_attr attr;
-            if (mq_getattr(mq, &attr) != -1) {
-                std::cout << "Max message size in the queue: " << attr.mq_msgsize << std::endl;
-            } else {
-                std::cout <<"failed to get message queue attr" << std::endl;
-            }
+            std::string queueName = QUEUE_NAME_BASE + std::to_string(getpid());
+            std::cout << "Pid " << getpid() << "Set queueName: " << queueName << std::endl;
+
+            // struct mq_attr attr;
+            // if (mq_getattr(mq, &attr) != -1) {
+            //     std::cout << "Max message size in the queue: " << attr.mq_msgsize << std::endl;
+            // } else {
+            //     std::cout <<"failed to get message queue attr" << std::endl;
+            // }
 
             // recv(), -1, error; 0, connect down; x, bytes length
             std::string encryptUsername, encryptPassword;
@@ -331,7 +339,7 @@ int main() {
                 memset(&buffer, 0, MAXLINE);
                 int reqFlag = recv(serverChildSocketFD, buffer, MAXLINE, 0);
                 if (reqFlag <= 0) break;
-                std::cout << "Data received from Client: " << buffer << std::endl;
+                // std::cout << "Data received from Client: " << buffer << std::endl;
                 std::string opCode;
                 std::string roomcode;
                 RequestType reqType;
@@ -341,6 +349,26 @@ int main() {
                 char respMsg[MAX_MSGSIZE];
                 sockaddr_in targetSockaddr;
                 memset(&targetSockaddr, 0, sizeof(targetSockaddr));
+                char rc = roomcode.at(0);
+                if (rc != 'S' && rc != 'D' && rc != 'U') {
+                    // do not forward to backedn server
+                    // define myself message.
+                    if (reqType == AVAILABILITY) {
+                        std::cout << "The main server has received the availability request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
+                    } else {
+                        std::cout << "The main server has received the reservation request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
+                    }
+                    std::string res2client = "800" + roomcode;
+                    send(serverChildSocketFD, res2client.data(), res2client.length(), 0);
+                    std::cout << "Error! Invalid room prefix." << std::endl;
+                    if (reqType == RESERVATION) {
+                        std::cout << "The main server sent the reservation result to the client." << std::endl;
+                    } else {
+                        std::cout << "The main server sent the availability information to the client." << std::endl;
+                    }
+                    
+                    continue;
+                }
                 targetSockaddr = forwardTable[roomcode.at(0)];
                 socklen_t socklen = sizeof(targetSockaddr);
                 // forward to UDP
@@ -375,14 +403,29 @@ int main() {
                 std::string clientMqId;
                 // recv from UDP backend server
                 if (!(userType == GUEST && reqType == RESERVATION)) {
+
+                    mqd_t mq = mq_open(queueName.data(), O_CREAT | O_RDWR, 0666, NULL);
+                    if (mq == (mqd_t)-1) {
+                        std::cout << "TCP child process MQ open fail." << std::endl;
+                        std::cout << "Failed queueName: " << queueName << std::endl;
+                        mq_close(mq);
+                        perror("mq_open");
+                        mq_unlink(queueName.data());
+                        exit(1);
+                    }
+
                     unsigned int priority;
                     ssize_t bytesRead;
                     bytesRead = mq_receive(mq, (char *)respMsg, MAX_MSGSIZE, &priority);
                     if (bytesRead < 0) {
                         perror("mq_receive");
                         mq_close(mq);
+                        mq_unlink(queueName.data());
                         continue;
                     }
+                    mq_close(mq);
+                    mq_unlink(queueName.data());
+                    
                     // else
                     std::string respMsgS(respMsg, bytesRead);
                     // roomcode contains the serverTag
@@ -399,6 +442,7 @@ int main() {
                     } else {
                         std::cout << "The main server received the response from Server " << opRoomCode.at(0) << " using UDP over port " << UDP_PORT << "." << std::endl;
                     }
+
                 } else {
                     // when no forward, no receive.
                     respCode = "500";
@@ -418,8 +462,6 @@ int main() {
                 // add control logic to Which Server
                 // forwardToBackendServer(roomcode, reqCode, userType,);
             }
-            mq_close(mq);
-            mq_unlink(queueName.data());
             exit(0);
             // exit the child process
         } else if (pid > 0){
