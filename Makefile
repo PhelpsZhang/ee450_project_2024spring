@@ -5,14 +5,15 @@ CXX=g++
 CXXFLAGS=-Wall -g -std=c++11
 
 # define link
-LIBS=-lrt
+LIBS1=-lrt
+LIBS2=-lssl -lcrypto
 
 # target
 all: client serverM serverS serverD serverU
 
 # serverM compiling rule
 serverM: serverM.o
-	$(CXX) $(CXXFLAGS) -o serverM serverM.o $(LIBS)
+	$(CXX) $(CXXFLAGS) -o serverM serverM.o $(LIBS1)
 
 # serverS compiling rule
 serverS: serverS.o
@@ -28,7 +29,7 @@ serverU: serverU.o
 
 # client compiling rule
 client: client.o
-	$(CXX) $(CXXFLAGS) -o client client.o
+	$(CXX) $(CXXFLAGS) -o client client.o $(LIBS2)
 
 # serverM dependency
 serverM.o: serverM.cpp serverM.h

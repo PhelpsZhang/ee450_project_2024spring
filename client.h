@@ -13,8 +13,13 @@
 #include<arpa/inet.h>
 #include<sys/wait.h>
 
-#include <iostream>
-#include <string>
+#include<cctype>
+#include<iostream>
+#include<string>
+#include<sstream>
+#include<iomanip>
+#include<openssl/sha.h>
+// #include <openssl/aes.h>
 
 enum {
     FOREIGN_PORT = 45089,
@@ -37,12 +42,20 @@ enum Res2Client {
     UNAVAILABLE,
     NONEXISTENT
 };
+/*
+    PERMISSION_DENIED: "500";
+    AVAILABLE: "600";
+    UNAVAILABLE: "700";
+    NONEXISTENT: "800";
+*/
 
 int clientSocketInitialize();
 
 bool checkValid(const std::string& input);
 
 void encrypt(const std::string& input, std::string& output);
+
+void encrypt_SHA256(const std::string &input, const std::string &salt, std::string &output);
 
 bool receiveAuth(const std::string responseMsgCode, const std::string username);
 

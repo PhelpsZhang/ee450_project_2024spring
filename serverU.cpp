@@ -42,9 +42,9 @@ int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap) {
     file.close();
 
     
-    for (auto it = roomInfoMap.begin(); it != roomInfoMap.end(); ++it) {
-        std::cout << "roomcode:" << it->first << " count:" << it->second << std::endl;
-    }
+    // for (auto it = roomInfoMap.begin(); it != roomInfoMap.end(); ++it) {
+    //     std::cout << "roomcode:" << it->first << " count:" << it->second << std::endl;
+    // }
     return 0;
 }
 
@@ -76,12 +76,16 @@ int main(){
     // send message to serverM
     sendto(udpSocketFD, roomStatus.data(), roomStatus.length(), 0,
              (const struct sockaddr *) &serverMAddress, socklen);
-
+    std::cout << "The Server U has sent the room status to the main server." << std::endl;
 
     char buffer[MAXLINE];
     while (true) {
         int byteLen = recvfrom(udpSocketFD, (char*) buffer, MAXLINE, 0,
                 (struct sockaddr*)&serverMAddress, &socklen);
+        if (byteLen < 0) {
+            perror("recvfrom");
+            std::cout << "recvfrom Error" << std::endl;
+        }
         buffer[byteLen] = '\0';
         std::string req(buffer, byteLen);
         std::istringstream iss(req);

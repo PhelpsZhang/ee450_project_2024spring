@@ -9,7 +9,6 @@ bool checkValid(const std::string& input){
 }
 
 void encrypt(const std::string& input, std::string& output){
-    // make sure it is empty. more robotic.
     output.clear();
     // implementation of encrpytion
     for (std::string::const_iterator it = input.begin(); it != input.end(); ++it) {
@@ -24,6 +23,23 @@ void encrypt(const std::string& input, std::string& output){
     }
 }
 
+void encrypt_SHA256(const std::string &input, const std::string &salt, std::string &output) {
+    // output store, 32 bytes
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    // Update sha256, 
+    SHA256_Update(&sha256, input.data(), input.length());
+    // with Salt
+    SHA256_Update(&sha256, salt.data(), salt.length());
+    // store to hash[]
+    SHA256_Final(hash, &sha256);
+    std::stringstream ss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    }
+    output = ss.str();
+}
 
 bool receiveAuth(const std::string responseMsgCode, const std::string username) {
     std::string displayMsg;
@@ -112,63 +128,86 @@ int clientSocketInitialize(){
         return ERROR_FLAG;
     }
     
+    // get local Socket Address (PORT)
+    sockaddr_in localSocketAddress;
+    socklen_t socketLen = sizeof(localSocketAddress);
+    memset(&localSocketAddress, 0, sizeof(localSocketAddress));
+    if(ERROR_FLAG == getsockname(clientSocketFD, (struct sockaddr *)&localSocketAddress, &socketLen)) {
+        std::cout << "Getsockname Failed." << std::endl;
+        return ERROR_FLAG;
+    }
+    int localPort = ntohs(localSocketAddress.sin_port);
+
     // type in the username and password
     std::string username, password;
     UserType userType = GUEST;
     while (true) {
         std::cout << "Please enter the username: ";
         std::getline(std::cin, username);
-        if (!username.empty()) break;
-        // add format check.
-        std::cout << " Username cannot be empty. Please try again. To be removed." << std::endl;
+        std::cout << "Please enter the password (Press “Enter” to skip for guest): ";
+        std::getline(std::cin, password);
+        // Check input constraint. Robust.
+        if (username.length() < 5 || username.length() > 50) {
+            std::cout << "Username length should be between 5 and 50 characters." << std::endl;
+            continue;
+        }
+        bool isLowerFlag = false;
+        for (char c : username) {
+            if (!std::islower(c)) {
+                isLowerFlag = true;
+            }
+        }
+        if (isLowerFlag) {
+            std::cout << "Username string include non-lower case characters." << std::endl;
+            continue;
+        }
+        if (password.length() != 0 && (password.length() < 5 || password.length() > 50)) {
+            std::cout << "Password length should be between 5 and 50 characters OR you can skip it." << std::endl;
+            continue;
+        }
+
+        /* Encrypt
+        * Salt should be randomly generated and stored in the database along with user information.
+        * However, for simplicity here,
+        * Using the original shif-by-3 encrypt() to 'pretend' to generate a salt value.
+        */
+        std::string encryptUsername, encryptPassword;
+        std::string salt;
+        encrypt(username, salt);
+        encrypt_SHA256(username, salt, encryptUsername);
+        encrypt_SHA256(password, salt, encryptPassword);
+
+        // Solving Problem about 'TCP no Boundary'.
+        // Potential Another way: The first n characters are designated as markers.
+        uint32_t dataLen = htonl(encryptUsername.length());
+        send(clientSocketFD, &dataLen, sizeof(dataLen), 0);    
+        send(clientSocketFD, encryptUsername.data(), encryptUsername.length(), 0);
+
+        if(password.empty()) {
+            dataLen = htonl(password.length());
+            send(clientSocketFD, &dataLen, sizeof(dataLen), 0);
+            userType = GUEST; 
+            std::cout << username <<" sent a guest request to the main server using TCP over port " << localPort << std::endl;
+        } else {
+            dataLen = htonl(encryptPassword.length());
+            send(clientSocketFD, &dataLen, sizeof(dataLen), 0);
+            send(clientSocketFD, encryptPassword.data(), encryptPassword.length(), 0);
+            userType = MEMBER;
+            std::cout << username <<" sent an authentication request to the main server." << std::endl;
+        }
+
+        // receive authentication Msg
+        char buffer[1024] = {};
+        std::string res;
+        recv(clientSocketFD, buffer, 1024, 0);
+        // std::cout << buffer << " buffer size:" << strlen(buffer) << std::endl;
+        bool authRes = receiveAuth(buffer, username);
+
+        if (authRes) {
+            break;
+        }
     }
     
-    std::cout << "Please enter the password (Press “Enter” to skip for guest): ";
-    std::getline(std::cin, password);
-    
-    // get local Socket Address (PORT)
-    sockaddr_in localSocketAddress;
-    socklen_t socketLen = sizeof(localSocketAddress);
-    memset(&localSocketAddress, 0, sizeof(localSocketAddress));
-    if(ERROR_FLAG == getsockname(clientSocketFD, (struct sockaddr *)&localSocketAddress, &socketLen)) {
-        std::cout << "getsockname failed. To be removed" << std::endl;
-        return ERROR_FLAG;
-    }
-    int localPort = ntohs(localSocketAddress.sin_port);
-
-    std::string encryptUsername, encryptPassword;
-    encrypt(username, encryptUsername);
-    encrypt(password, encryptPassword);
-    // std::cout << "after encrypting username:" << encryptUsername << std::endl;
-    // std::cout << "after encrypting password:" << encryptPassword << std::endl;
-
-    // Solving Problem about 'TCP no Boundary'.
-    // Potential Another way: The first n characters are designated as markers.
-    uint32_t dataLen = htonl(encryptUsername.length());
-    send(clientSocketFD, &dataLen, sizeof(dataLen), 0);    
-    send(clientSocketFD, encryptUsername.data(), encryptUsername.length(), 0);
-    dataLen = htonl(encryptPassword.length());
-    send(clientSocketFD, &dataLen, sizeof(dataLen), 0);
-    send(clientSocketFD, encryptPassword.data(), encryptPassword.length(), 0);
-
-    if(password.empty()) {
-        userType = GUEST; 
-        std::cout << username <<" sent a guest request to the main server using TCP over port " << localPort << std::endl;
-    } else {
-        userType = MEMBER;
-        std::cout << username <<" sent an authentication request to the main server." << std::endl;
-    }
-
-    // receive authentication Msg
-    char buffer[1024] = {};
-    std::string res;
-    recv(clientSocketFD, buffer, 1024, 0);
-    // std::cout << buffer << " buffer size:" << strlen(buffer) << std::endl;
-    bool authRes = receiveAuth(buffer, username);
-    
-    if (!authRes) {
-        std::cout << "Wrong auth, maybe abnormal shutdown." << std::endl;
-    }
 
     std::string roomCode;
     std::string opCode = "Availability";
@@ -176,11 +215,25 @@ int clientSocketInitialize(){
     while (true) {
         std::cout << "Please enter the room code:";
         std::getline(std::cin, roomCode);
+
+        if (roomCode.length() == 0) {
+            std::cout << "Warning: Invalid roomCode Length!" << std::endl;
+            continue;
+        } else if (std::islower(roomCode.at(0))){
+            std::cout << "Warning: Invalid roomCode!" << std::endl;
+            continue;
+        }
+
         std::cout << "Would you like to search for the availability or make a reservation?(Enter \"Availability\" to search for the availability or Enter \"Reservation\" to make a reservation):";
         std::getline(std::cin, opCode);
 
-        if (opCode.length() == 0 || roomCode.length() == 0)
-            std::cout << "invalid Input" << std::endl;
+        if (opCode.length() == 0) {
+            std::cout << "Warning: Invalid Request Input!" << std::endl;
+            continue;  
+        } else if (opCode != "Availability" && opCode != "Reservation"){
+            std::cout << "Warning: Invalid Request Input!" << std::endl;
+            continue;  
+        }
 
         std::string RequestMsg = opCode + ":" + roomCode;
         if (opCode == "Availability") {
@@ -204,33 +257,14 @@ int clientSocketInitialize(){
         // send request
         char recvRes[1024] = {};
         int byteLen = recv(clientSocketFD, recvRes, 1024, 0);
+        if (byteLen < 0) {
+            std::cout << "recv Error" << std::endl;
+        }
         recvRes[byteLen] = '\0';
         std::string responseMsgCode(recvRes, byteLen);
         receiveResp(responseMsgCode.substr(0,3), opCode, localPort, roomCode);
 
     }
-
-    // send data
-    //const char* roomcode = "S102";
-    //send(clientSocket, roomcode, strlen(roomcode), 0);
-
-    // if (password.empty())
-    // send(clientSocketFD, username)
-
-
-    // std::string message;
-    // while(1) {
-    //     std::cout << "Enter a message: ";
-    //     std::getline(std::cin, message);
-    //     //if(message.empty() || std::cin.eof()) break;
-    //     if(message == "quit") {break;};
-    //     std::cout << "Final Send Message: " << message << std::endl;
-    //     if (send(clientSocket, message.data(), message.size(), 0) == -1) {
-    //         std::cout<<"xxx" <<std::endl;
-    //         perror("send failed");
-    //         break;
-    //     }
-    // }
 
     close(clientSocketFD);
     return 0;
