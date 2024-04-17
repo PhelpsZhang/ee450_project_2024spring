@@ -262,7 +262,7 @@ int clientSocketInitialize(){
         }
         recvRes[byteLen] = '\0';
         std::string responseMsgCode(recvRes, byteLen);
-        receiveResp(responseMsgCode.substr(0,3), opCode, localPort, roomCode);
+        receiveResp(responseMsgCode, opCode, localPort, roomCode);
 
     }
 

@@ -336,7 +336,7 @@ int main() {
                     } else {
                         std::cout << "The main server has received the reservation request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
                     }
-                    std::string res2client = "800" + roomcode;
+                    std::string res2client = "800";
                     send(serverChildSocketFD, res2client.data(), res2client.length(), 0);
                     if (reqType == RESERVATION) {
                         std::cout << "The main server sent the reservation result to the client." << std::endl;
@@ -378,7 +378,6 @@ int main() {
                 }
 
                 std::string respCode;
-                std::string opRoomCode;
                 std::string clientMqId;
                 // recv from UDP backend server
 
@@ -411,25 +410,23 @@ int main() {
                     // roomcode contains the serverTag
                     std::istringstream iss(respMsgS);
                     std::getline(iss, respCode, ':');
-                    std::getline(iss, opRoomCode, ':');
                     std::getline(iss, clientMqId, ':');
                     // clientMqId shoud be equal to queueName
                     // std::cout << "recvMqId: " << clientMqId << " queueName: " << queueName << std::endl;
                     if (respCode == "600" && reqType == RESERVATION) {
-                        std::cout << "The main server received the response and the updated room status from Server " << opRoomCode.at(0) << " using UDP over port" << UDP_PORT << "." << std::endl;
-                        std::cout << "The room status of Room " << opRoomCode << " has been updated." << std::endl;
+                        std::cout << "The main server received the response and the updated room status from Server " << roomcode.at(0) << " using UDP over port" << UDP_PORT << "." << std::endl;
+                        std::cout << "The room status of Room " << roomcode << " has been updated." << std::endl;
                         // send to client
                     } else {
-                        std::cout << "The main server received the response from Server " << opRoomCode.at(0) << " using UDP over port " << UDP_PORT << "." << std::endl;
+                        std::cout << "The main server received the response from Server " << roomcode.at(0) << " using UDP over port " << UDP_PORT << "." << std::endl;
                     }
 
                 } else {
                     // when no forward, no receive.
                     respCode = "500";
-                    opRoomCode = roomcode;
                     // to be altered
                 }
-                std::string res2client = respCode + opRoomCode;
+                std::string res2client = respCode;
                 // Maybe distinguish the send() and display.
                 // send back to the client
                 send(serverChildSocketFD, res2client.data(), res2client.length(), 0);

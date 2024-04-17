@@ -127,8 +127,8 @@ int main(){
                 std::cout << "Successful reservation. The count of Room "<< roomcode << " is now " << it->second << "." << std::endl;
             }
         }
-        responseMsg = ResToString(resCode) + ":" + roomcode + ":" + clientMqId;
-        // updatedOrNot + responseMsg + roomcode
+        responseMsg = ResToString(resCode) + ":" + clientMqId;
+        // responseMsg + clientId
         sendto(udpSocketFD, responseMsg.data(), responseMsg.length(), 0,
                 (const struct sockaddr *)&serverMAddress, socklen);
         if (!updateFlag)
