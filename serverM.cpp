@@ -28,7 +28,7 @@ int loadMember(std::unordered_map<std::string, std::string> &credentials) {
     std::string line;
 
     if (!file) {
-        std::cout << "Cannot open file member_unencrypted.ext" << std::endl;
+        std::cerr << "Cannot open file member_unencrypted.ext" << std::endl;
         return ERROR_FLAG;
     }
 
@@ -41,7 +41,7 @@ int loadMember(std::unordered_map<std::string, std::string> &credentials) {
             std::getline(iss, password);
             credentials[username] = password;
         } else {
-            std::cout << "format wrong OR file end." << std::endl;
+            std::cerr << "Error: Line format incorrect, expected username and password separated by a comma." << std::endl;
         }
     }
 
@@ -95,7 +95,7 @@ int recvAuthMessage(int socketFD, std::string &output) {
     if (readBytesLen > 0) {
         output = std::string(buffer, readBytesLen);
     } else {
-        std::cout << "socket receive error OR connection down" << std::endl;
+        std::cerr << "socket receive error OR connection down" << std::endl;
     }
     delete[] buffer;
     return 0;
@@ -103,7 +103,7 @@ int recvAuthMessage(int socketFD, std::string &output) {
 
 int parseRequest(const std::string &requestMsg, RequestType &reqCode, std::string &roomcode) {
     if (requestMsg.length() == 0) {
-        std::cout << "requestMsg Error!" << std::endl;
+        std::cerr << "requestMsg Error!" << std::endl;
         return ERROR_FLAG;
     }
 
@@ -134,7 +134,7 @@ int forwardTableBuild(int udpSocketFD, std::unordered_map<char, sockaddr_in> &fo
         uua_len = sizeof(udpUnknownAddress);
         int recvSize = recvfrom(udpSocketFD, (char*) buffer, MAXLINE, 0, (struct sockaddr *) &udpUnknownAddress, &uua_len);
         if (recvSize <= 0) {
-            std::cout << "recv roomstatus from UDP failed." << std::endl;
+            std::cerr << "recv roomstatus from UDP failed." << std::endl;
             break;
         }
         buffer[recvSize] = '\0';
@@ -168,7 +168,7 @@ int main() {
 
     // bind UDP socket
     if (ERROR_FLAG == bind(udpSocketFD, (const struct sockaddr *)&udpSocketAddress, sizeof(udpSocketAddress))) {
-        std::cout << "UDP Socket bind Failed." << std::endl;
+        std::cerr << "UDP Socket bind Failed." << std::endl;
         return ERROR_FLAG;
     }
 
@@ -199,14 +199,14 @@ int main() {
             std::string mqName = recvMsg.substr(pos);
             mqd_t mq = mq_open(mqName.data(), O_CREAT | O_RDWR, 0666, NULL);
             if (mq == (mqd_t)-1) {
-                std::cout << "UDP process MQ open fail." << std::endl;
+                std::cerr << "UDP process MQ open fail." << std::endl;
                 perror("mq_open");
                 mq_close(mq);
                 mq_unlink(mqName.data());
                 break;
             }
             if (-1 == mq_send(mq, recvMsg.data(), recvMsg.length(), 0)) {
-                std::cout << "UDP process MQ send fail." << std::endl;
+                std::cerr << "UDP process MQ send fail." << std::endl;
                 perror("mq_send");
                 mq_close(mq);
                 mq_unlink(mqName.data());
@@ -226,14 +226,14 @@ int main() {
     // create TCP socket;
     int serverSocketFD = socket(AF_INET, SOCK_STREAM, 0);
     if(ERROR_FLAG == serverSocketFD) {
-        std::cout << "TCP Socket FD creation Failed." << std::endl;
+        std::cerr << "TCP Socket FD creation Failed." << std::endl;
         return ERROR_FLAG;
     }
 
     // Avoid bind failed. Allow bind() in TIME_WAIT status.
     int yes = 1;
     if (setsockopt(serverSocketFD, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
-        std::cout << "Failed to set SO_REUSEADDR." << std::endl;
+        std::cerr << "Failed to set SO_REUSEADDR." << std::endl;
         close(serverSocketFD);
         return -1;
     }
@@ -250,14 +250,14 @@ int main() {
     // add some error check 
 
     if (ERROR_FLAG == bind(serverSocketFD, (struct sockaddr*)&serverSocketAddress, sizeof(serverSocketAddress))) {
-        std::cout << "TCP Socket bind Failed." << std::endl;
+        std::cerr << "TCP Socket bind Failed." << std::endl;
         return ERROR_FLAG;
     }
 
     // listening to assigned socket
     // add error check
     if (ERROR_FLAG == listen(serverSocketFD, QUEUE_LIMIT)) {
-        std::cout << "TCP Socket listen Failed." << std::endl;
+        std::cerr << "TCP Socket listen Failed." << std::endl;
         return ERROR_FLAG;  
     }
     
@@ -271,7 +271,7 @@ int main() {
         int serverChildSocketFD = accept(serverSocketFD, (struct sockaddr *)&clientSocketAddress, &clientAddrLen);
         // child socket created, receiving data
         if (ERROR_FLAG == serverChildSocketFD) {
-            std::cout << "TCP Socket accept Failed." << std::endl;
+            std::cerr << "TCP Socket accept Failed." << std::endl;
             return ERROR_FLAG;       
         }
         childNumber += 1;
@@ -385,8 +385,8 @@ int main() {
 
                     mqd_t mq = mq_open(queueName.data(), O_CREAT | O_RDWR, 0666, NULL);
                     if (mq == (mqd_t)-1) {
-                        std::cout << "TCP child process MQ open fail." << std::endl;
-                        std::cout << "Failed queueName: " << queueName << std::endl;
+                        std::cerr << "TCP child process MQ open fail." << std::endl;
+                        std::cerr << "Failed queueName: " << queueName << std::endl;
                         mq_close(mq);
                         perror("mq_open");
                         mq_unlink(queueName.data());
@@ -414,7 +414,7 @@ int main() {
                     // clientMqId shoud be equal to queueName
                     // std::cout << "recvMqId: " << clientMqId << " queueName: " << queueName << std::endl;
                     if (respCode == "600" && reqType == RESERVATION) {
-                        std::cout << "The main server received the response and the updated room status from Server " << roomcode.at(0) << " using UDP over port" << UDP_PORT << "." << std::endl;
+                        std::cout << "The main server received the response and the updated room status from Server " << roomcode.at(0) << " using UDP over port " << UDP_PORT << "." << std::endl;
                         std::cout << "The room status of Room " << roomcode << " has been updated." << std::endl;
                         // send to client
                     } else {

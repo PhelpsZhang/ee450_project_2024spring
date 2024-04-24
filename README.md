@@ -37,13 +37,13 @@ Some "**Optional**" parts can be ignored, they are just for personal git reposit
 - Makefile
   - Configured the program's compilation and linking. Supports compiling each program individually using `make xxx`, as well as using `make` to compile all programs at once. Supports `make clean` to remove compilation results and intermediate files.
 
+- member_unencrypted.txt
+  - Unencrypted original user data file, designed by myself. 
+  - I personally changed the first letter to lowercase as required, and the data saved in `member.txt` is also the encrypted data after being changed to lowercase.
+
 - member.txt
   - Stored user data encrypted using the **SHA256 hashing algorithm**.
   - Uses the SHA256 hashing algorithm to encrypt the original user authentication data in the file `member_unencrypted.txt`, and saves it in the same format in this file member.txt.
-
-- member_unencrypted.txt
-  - Unencrypted original user data file. 
-  - I personally changed the first letter to lowercase as required, and the data saved in `member.txt` is also the encrypted data after being changed to lowercase.
 
 ### Additional (Optional): 
 
@@ -53,6 +53,7 @@ Some "**Optional**" parts can be ignored, they are just for personal git reposit
 - generateFile.cpp
   - Just for personal use!
   - Reads the original user data from member_encrypted.txt, encrypts it, and writes it back to member.txt in the same format.
+  - Compile: `g++ -std=c++11 -o generateFile generateFile.cpp -lssl -lcrypto`
 
 - run_test.sh
   - Optional. Just for personal test script. 
