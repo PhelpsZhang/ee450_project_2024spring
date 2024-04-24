@@ -16,7 +16,7 @@ int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap) {
     std::string line;
 
     if (!file) {
-        std::cout << "cannot open file double.txt" << std::endl;
+        std::cerr << "cannot open file double.txt" << std::endl;
         return ERROR_FLAG;
     }
 
@@ -35,7 +35,7 @@ int loadRoomInfo(std::unordered_map<std::string, int> &roomInfoMap) {
                 std::cerr << "Number out of range: " << countStr << std::endl;
             }
         } else {
-            std::cout << "format wrong OR file end." << std::endl;
+            std::cerr << "format wrong OR file end." << std::endl;
         }
     }
 
@@ -85,7 +85,7 @@ int main(){
                 (struct sockaddr*)&serverMAddress, &socklen);
         if (byteLen < 0) {
             perror("recvfrom");
-            std::cout << "recvfrom Error" << std::endl;
+            std::cerr << "recvfrom Error" << std::endl;
         }
         buffer[byteLen] = '\0';
         std::string req(buffer, byteLen);
@@ -117,7 +117,7 @@ int main(){
                 std::cout << "Room " << roomcode << " is available." << std::endl;
             }
         } else {
-            std::cout << "The Server D received an reservation request from the main server." << std::endl;
+            std::cout << "The Server D received a reservation request from the main server." << std::endl;
             if (resCode == NONEXISTENT) {
                 std::cout << "Cannot make a reservation. Not able to find the room layout." << std::endl;
             } else if (resCode == UNAVAILABLE) {

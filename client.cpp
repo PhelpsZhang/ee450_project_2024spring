@@ -2,12 +2,6 @@
 
 #define FOREIGN_IP "127.0.0.1"
 
-
-bool checkValid(const std::string& input){
-    // check if the format of username and password is valid.
-    return true;
-}
-
 void encrypt(const std::string& input, std::string& output){
     output.clear();
     // implementation of encrpytion
@@ -44,7 +38,7 @@ void encrypt_SHA256(const std::string &input, const std::string &salt, std::stri
 bool receiveAuth(const std::string responseMsgCode, const std::string username) {
     std::string displayMsg;
     if (responseMsgCode == "100") {
-        displayMsg = "Welcome guest " + username;
+        displayMsg = "Welcome guest " + username + "!";
         std::cout << displayMsg << std::endl;
         return true;
     } else if (responseMsgCode == "200") {
@@ -52,7 +46,7 @@ bool receiveAuth(const std::string responseMsgCode, const std::string username) 
     } else if (responseMsgCode == "300") {
         displayMsg = "Failed login: Password does not match.";
     } else if (responseMsgCode == "400") {
-        displayMsg = "Welcome member " + username;
+        displayMsg = "Welcome member " + username + "!";
         std::cout << displayMsg << std::endl;
         return  true;
     }
@@ -111,7 +105,7 @@ int clientSocketInitialize(){
     // create TCP socket
     int clientSocketFD = socket(AF_INET, SOCK_STREAM, 0);
     if(ERROR_FLAG == clientSocketFD) {
-        std::cout << "Socket FD Failed." << std::endl;
+        std::cerr << "Socket FD Failed." << std::endl;
         return ERROR_FLAG;
     }
 
@@ -124,7 +118,7 @@ int clientSocketInitialize(){
     
     // connect() to serverM
     if (ERROR_FLAG == connect(clientSocketFD, (struct sockaddr*)&serverSocketAddress, sizeof(serverSocketAddress))) {
-        std::cout << "Connect Failed." << std::endl;
+        std::cerr << "Connect Failed." << std::endl;
         return ERROR_FLAG;
     }
     
@@ -133,7 +127,7 @@ int clientSocketInitialize(){
     socklen_t socketLen = sizeof(localSocketAddress);
     memset(&localSocketAddress, 0, sizeof(localSocketAddress));
     if(ERROR_FLAG == getsockname(clientSocketFD, (struct sockaddr *)&localSocketAddress, &socketLen)) {
-        std::cout << "Getsockname Failed." << std::endl;
+        std::cerr << "Getsockname Failed." << std::endl;
         return ERROR_FLAG;
     }
     int localPort = ntohs(localSocketAddress.sin_port);
@@ -148,7 +142,7 @@ int clientSocketInitialize(){
         std::getline(std::cin, password);
         // Check input constraint. Robust.
         if (username.length() < 5 || username.length() > 50) {
-            std::cout << "Username length should be between 5 and 50 characters." << std::endl;
+            std::cerr << "Username length should be between 5 and 50 characters." << std::endl;
             continue;
         }
         bool isLowerFlag = false;
@@ -158,11 +152,11 @@ int clientSocketInitialize(){
             }
         }
         if (isLowerFlag) {
-            std::cout << "Username string include non-lower case characters." << std::endl;
+            std::cerr << "Username string include non-lower case characters." << std::endl;
             continue;
         }
         if (password.length() != 0 && (password.length() < 5 || password.length() > 50)) {
-            std::cout << "Password length should be between 5 and 50 characters OR you can skip it." << std::endl;
+            std::cerr << "Password length should be between 5 and 50 characters OR you can skip it." << std::endl;
             continue;
         }
 
@@ -210,17 +204,17 @@ int clientSocketInitialize(){
     
 
     std::string roomCode;
-    std::string opCode = "Availability";
+    std::string opCode;
 
     while (true) {
         std::cout << "Please enter the room code:";
         std::getline(std::cin, roomCode);
 
         if (roomCode.length() == 0) {
-            std::cout << "Warning: Invalid roomCode Length!" << std::endl;
+            std::cerr << "Warning: Invalid roomCode!" << std::endl;
             continue;
         } else if (std::islower(roomCode.at(0))){
-            std::cout << "Warning: Invalid roomCode!" << std::endl;
+            std::cerr << "Warning: Invalid roomCode!" << std::endl;
             continue;
         }
 
@@ -228,10 +222,10 @@ int clientSocketInitialize(){
         std::getline(std::cin, opCode);
 
         if (opCode.length() == 0) {
-            std::cout << "Warning: Invalid Request Input!" << std::endl;
+            std::cerr << "Warning: Invalid Request Input!" << std::endl;
             continue;  
         } else if (opCode != "Availability" && opCode != "Reservation"){
-            std::cout << "Warning: Invalid Request Input!" << std::endl;
+            std::cerr << "Warning: Invalid Request Input!" << std::endl;
             continue;  
         }
 
@@ -258,7 +252,7 @@ int clientSocketInitialize(){
         char recvRes[1024] = {};
         int byteLen = recv(clientSocketFD, recvRes, 1024, 0);
         if (byteLen < 0) {
-            std::cout << "recv Error" << std::endl;
+            std::cerr << "recv Error" << std::endl;
         }
         recvRes[byteLen] = '\0';
         std::string responseMsgCode(recvRes, byteLen);

@@ -4,7 +4,6 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
-#include<errno.h>
 #include<string.h>
 #include<netdb.h>
 #include<sys/types.h>
@@ -31,6 +30,7 @@ enum Response {
     UNAVAILABLE,
     NONEXISTENT
 };
+
 
 std::string ResToString(Response resCode);
 
