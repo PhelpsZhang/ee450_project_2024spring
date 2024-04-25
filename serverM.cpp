@@ -336,7 +336,12 @@ int main() {
                     } else {
                         std::cout << "The main server has received the reservation request on Room " << roomcode << " from " << encryptUsername << " using TCP over port " << TCP_PORT << "." << std::endl;
                     }
-                    std::string res2client = "800";
+                    std::string res2client;
+                    if (userType == GUEST && reqType == RESERVATION) {
+                        res2client = "500";
+                    } else {
+                        res2client = "800";
+                    }
                     send(serverChildSocketFD, res2client.data(), res2client.length(), 0);
                     if (reqType == RESERVATION) {
                         std::cout << "The main server sent the reservation result to the client." << std::endl;

@@ -111,7 +111,7 @@ int main(){
             if (resCode == NONEXISTENT) {
                 std::cout << "Not able to find the room layout." << std::endl;
             } else if (resCode == UNAVAILABLE) {
-                std::cout << "Room " << roomcode << "is not available." << std::endl;
+                std::cout << "Room " << roomcode << " is not available." << std::endl;
             } else {
                 std::cout << "Room " << roomcode << " is available." << std::endl;
             }
