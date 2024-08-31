@@ -1,9 +1,9 @@
 # ee450_project_2024spring
 
 ## Student Information
-Author: Penghao Zhang
+Author: Phelps Zhang
 
-USC Student ID: #1119537089
+USC Student ID
 
 Email: penghaoz@usc.edu
 
