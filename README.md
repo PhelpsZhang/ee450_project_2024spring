@@ -9,6 +9,8 @@ Email: penghaoz@usc.edu
 
 ## What I've done.
 
+<img width="485" alt="Screenshot 2025-04-16 at 17 33 38" src="https://github.com/user-attachments/assets/492a3fed-4a24-48d3-a3f0-48944745dc2c" />
+
 I fully met the project basic requirements.
 
 I also completed the **Optional Part**: an upgrade to the encryption mechanism as an additional bonus feature. Using the SHA-256 hash function, usernames and passwords are encrypted in a one-way, irreversible manner.
